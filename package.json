@@ -1,0 +1,31 @@
+{
+  "name": "muggle-chat",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@muggle-chat/chat-ui": "workspace:^",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@mistjs/eslint-config": "^1.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/tsconfig": "^0.7.0",
+    "eslint": "^8.57",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5",
+    "vue-tsc": "^2.2.0"
+  },
+  "lint-staged": {
+    "./**/*.{js,ts,vue,tsx,jsx,css,less,json}": [
+      "eslint --fix"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@muggle-chat/chat-ui",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "author": "",
+  "license": "ISC",
+  "keywords": [],
+  "main": "main.ts",
+  "scripts": {
+    "dev": "vite --port 8888"
+  },
+  "devDependencies": {
+    "naive-ui": "^2.41.0"
+  }
+}
