@@ -77,6 +77,7 @@ function handleCopy() {
   display: flex;
   gap: 12px;
   padding: 8px 16px;
+  margin-bottom: 8px;
 
   &.user {
     flex-direction: row-reverse;
@@ -87,12 +88,14 @@ function handleCopy() {
 
     .message-content {
       background-color: #95ec69;
+      border-radius: 12px 2px 12px 12px;
     }
   }
 
   &.assistant {
     .message-content {
       background-color: #ffffff;
+      border-radius: 2px 12px 12px 12px;
     }
   }
 }
@@ -118,8 +121,8 @@ function handleCopy() {
 
 .message-content {
   padding: 12px 16px;
-  border-radius: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  word-break: break-word;
 
   :deep(p) {
     margin: 0;
@@ -141,6 +144,7 @@ function handleCopy() {
   gap: 8px;
   font-size: 12px;
   color: #999;
+  padding: 0 4px;
 
   .time {
     opacity: 0.8;

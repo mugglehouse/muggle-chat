@@ -1,5 +1,17 @@
 <script lang="ts" setup>
+import { ref } from 'vue'
 import { UserOutlined } from '@ant-design/icons-vue'
+import ApiKeySettings from '../../components/settings/ApiKeySettings.vue'
+
+const showSettings = ref(false)
+
+function openSettings() {
+  showSettings.value = true
+}
+
+function closeSettings() {
+  showSettings.value = false
+}
 </script>
 
 <template>
@@ -18,7 +30,7 @@ import { UserOutlined } from '@ant-design/icons-vue'
         </div>
         <template #overlay>
           <a-menu class="user-menu">
-            <a-menu-item key="settings">
+            <a-menu-item key="settings" @click="openSettings">
               设置
             </a-menu-item>
             <a-menu-item key="logout">
@@ -28,6 +40,17 @@ import { UserOutlined } from '@ant-design/icons-vue'
         </template>
       </a-dropdown>
     </div>
+
+    <!-- 设置对话框 -->
+    <a-modal
+      v-model:visible="showSettings"
+      title="设置"
+      :footer="null"
+      width="500px"
+      @cancel="closeSettings"
+    >
+      <ApiKeySettings />
+    </a-modal>
   </div>
 </template>
 

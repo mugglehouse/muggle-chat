@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useChatStore } from '../../store'
+import { useChatStore } from '../../store/chat'
 import type { Message } from '../../store/chat'
 import MessageItem from './components/message/MessageItem.vue'
 
@@ -19,9 +19,23 @@ async function scrollToBottom() {
 }
 
 // 监听消息变化，自动滚动
-watch(currentMessages, () => {
-  scrollToBottom()
-})
+watch(
+  currentMessages,
+  (newMessages, oldMessages) => {
+    // 检查是否有新消息或消息内容更新
+    const hasNewMessage = newMessages.length !== oldMessages?.length
+    const hasContentUpdate = newMessages.some((msg, index) => {
+      const oldMsg = oldMessages?.[index]
+      return oldMsg && (msg.content !== oldMsg.content || msg.status !== oldMsg.status)
+    })
+
+    if (hasNewMessage || hasContentUpdate) {
+      console.log('消息更新，滚动到底部')
+      scrollToBottom()
+    }
+  },
+  { deep: true, immediate: true },
+)
 
 // 处理消息重试
 async function handleRetry(message: Message) {
@@ -89,10 +103,9 @@ onMounted(() => {
   .message-list {
     height: 100%;
     overflow-y: auto;
-    padding: 20px;
+    padding: 20px 0;
     display: flex;
     flex-direction: column;
-    gap: 20px;
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -141,6 +154,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   color: #999;
+  padding: 20px;
 
   .empty-icon {
     font-size: 48px;

@@ -1,55 +1,57 @@
-# Chat Store 设计文档
+# Store 状态管理设计文档
 
-## 数据结构
+## 状态结构
 
-### Message（消息）
+### 消息类型
 ```typescript
 interface Message {
-  id: string          // 消息唯一标识
-  role: 'user' | 'assistant'  // 消息角色：用户/AI助手
-  content: string     // 消息内容
-  timestamp: number   // 时间戳
+  id: string              // 消息唯一标识
+  role: 'user' | 'assistant'  // 消息角色
+  content: string         // 消息内容
+  timestamp: number       // 时间戳
   status: 'sending' | 'success' | 'error'  // 消息状态
 }
 ```
 
-### ChatSession（会话）
+### 会话类型
 ```typescript
 interface ChatSession {
-  id: string          // 会话唯一标识
-  title: string       // 会话标题
-  messages: Message[] // 消息列表
+  id: string           // 会话唯一标识
+  title: string        // 会话标题
+  messages: Message[]  // 消息列表
   createdAt: number   // 创建时间
   updatedAt: number   // 更新时间
 }
 ```
 
-## 状态管理 (Setup Store)
+## 状态管理
 
-### State
+### 核心状态
 ```typescript
-const currentSessionId = ref('')              // 当前选中的会话 ID
-const sessions = ref<ChatSession[]>([])       // 所有会话列表
-const loading = ref(false)                    // 加载状态
-const error = ref<string | null>(null)        // 错误信息
+const currentSessionId = ref('')  // 当前会话ID
+const sessions = ref<ChatSession[]>([])  // 会话列表
+const loading = ref(false)  // 加载状态
+const error = ref<string | null>(null)  // 错误信息
 ```
 
-### Getters (Computed)
+### 计算属性
 ```typescript
-const currentSession = computed(() =>         // 获取当前会话详情
+const currentSession = computed(() =>
   sessions.value.find(session => session.id === currentSessionId.value)
 )
 
-const currentMessages = computed(() =>        // 获取当前会话的消息列表
+const currentMessages = computed(() =>
   currentSession.value?.messages || []
 )
 
-const sessionList = computed(() =>            // 获取会话列表（用于侧边栏显示）
+const sessionList = computed(() =>
   sessions.value.map(({ id, title, updatedAt }) => ({ id, title, updatedAt }))
 )
 ```
 
-### Actions
+## 功能实现
+
+### 1. 会话管理
 ```typescript
 // 创建新会话
 function createSession() {
@@ -62,19 +64,12 @@ function createSession() {
   }
   sessions.value.push(newSession)
   currentSessionId.value = newSession.id
+  saveSessions()
 }
 
 // 切换会话
 function switchSession(sessionId: string) {
   currentSessionId.value = sessionId
-}
-
-// 发送消息
-async function sendMessage(content: string) {
-  // 创建消息
-  // 更新会话
-  // 调用 API
-  // 处理响应
 }
 
 // 清空当前会话
@@ -83,61 +78,117 @@ function clearCurrentSession() {
   if (session) {
     session.messages = []
     session.updatedAt = Date.now()
+    saveSessions()
   }
 }
 
 // 删除会话
 function deleteSession(sessionId: string) {
-  // 删除指定会话
-  // 如果是当前会话，切换到其他会话
+  const index = sessions.value.findIndex(s => s.id === sessionId)
+  if (index > -1) {
+    sessions.value.splice(index, 1)
+    if (sessionId === currentSessionId.value)
+      currentSessionId.value = sessions.value[0]?.id || ''
+    saveSessions()
+  }
 }
 ```
 
-## 使用示例
-
+### 2. 消息处理
 ```typescript
-import { useChatStore } from '@/store'
-import { storeToRefs } from 'pinia'  // 用于保持响应性
+async function sendMessage(content: string) {
+  // 创建用户消息
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    role: 'user',
+    content,
+    timestamp: Date.now(),
+    status: 'sending',
+  }
 
-// 在组件中使用
-const store = useChatStore()
+  // 使用数组方法触发响应式更新
+  session.messages = [...session.messages, userMessage]
 
-// 解构时保持响应性
-const { currentMessages, loading } = storeToRefs(store)
-const { createSession, sendMessage } = store
+  // 创建 AI 消息占位
+  const aiMessage: Message = {
+    id: (Date.now() + 1).toString(),
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now(),
+    status: 'sending',
+  }
+  session.messages = [...session.messages, aiMessage]
 
-// 创建新会话
-createSession()
-
-// 发送消息
-await sendMessage('Hello, ChatGPT!')
-
-// 监听消息列表变化
-watchEffect(() => {
-  console.log('当前消息列表：', currentMessages.value)
-})
+  // 处理流式响应
+  const response = await chatService.sendStreamMessage(
+    session.messages.slice(0, -1),
+    {},
+    (text) => {
+      // 创建新的消息数组来触发响应式更新
+      const messageIndex = session.messages.findIndex(msg => msg.id === aiMessage.id)
+      if (messageIndex !== -1) {
+        const updatedMessages = [...session.messages]
+        updatedMessages[messageIndex] = {
+          ...aiMessage,
+          content: text,
+        }
+        session.messages = updatedMessages
+      }
+    }
+  )
+}
 ```
 
-## 待办事项
+## 本地存储
 
-1. 实现与 ChatGPT API 的集成
-   - 创建 API 服务层
-   - 处理流式响应
-   - 实现打字机效果
+### 1. 存储实现
+```typescript
+// 初始化时从本地存储加载会话
+const initSessions = () => {
+  const savedSessions = localStorage.getItem(STORAGE_KEYS.sessions)
+  if (savedSessions) {
+    sessions.value = JSON.parse(savedSessions)
+    if (sessions.value.length > 0)
+      currentSessionId.value = sessions.value[0].id
+  }
+}
 
-2. 添加消息持久化存储
-   - 使用 localStorage 或 IndexedDB
-   - 自动保存/加载会话历史
+// 保存会话到本地存储
+const saveSessions = () => {
+  localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(sessions.value))
+}
+```
 
-3. 实现会话标题的自动生成
-   - 基于首条消息内容
-   - 使用 AI 总结对话主题
+## 响应式更新
 
-4. 添加消息重试机制
-   - 失败消息重发
-   - 错误提示优化
+### 1. 数组更新
+- 使用展开运算符创建新数组
+- 避免直接修改数组元素
+- 触发深层响应式更新
 
-5. 优化用户体验
-   - 添加加载动画
-   - 实现消息状态提示
-   - 支持快捷键操作 
+### 2. 对象更新
+- 使用解构赋值创建新对象
+- 保持对象引用的一致性
+- 确保响应式追踪
+
+## 最佳实践
+
+### 1. 状态管理
+- 集中管理应用状态
+- 保持状态的响应式
+- 及时持久化数据
+
+### 2. 性能优化
+- 避免不必要的更新
+- 优化大量数据的处理
+- 合理使用计算属性
+
+### 3. 错误处理
+- 完善的错误状态
+- 用户友好的提示
+- 异常状态的恢复
+
+### 4. 数据持久化
+- 定期保存状态
+- 防止数据丢失
+- 优化存储结构 

@@ -1,18 +1,39 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { PaperClipOutlined, SendOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { useChatStore } from '../../store/chat'
+import { chatService } from '../../api/chat'
 
-const message = ref('')
+const messageInput = ref('')
+const chatStore = useChatStore()
 
-function handleSend() {
-  if (!message.value.trim())
+async function handleSend() {
+  if (!messageInput.value.trim())
     return
-  // 处理发送消息逻辑
-  message.value = ''
+
+  // 检查是否设置了 API Key
+  if (!chatService.getApiKey()) {
+    message.error('请先在设置中配置 OpenAI API Key')
+    return
+  }
+
+  // 发送消息
+  try {
+    console.log('发送消息:', messageInput.value)
+    await chatStore.sendMessage(messageInput.value)
+    console.log('消息发送成功')
+    messageInput.value = ''
+  }
+  catch (err) {
+    console.error('发送消息失败:', err)
+    message.error('发送消息失败，请重试')
+  }
 }
 
 function handleUpload() {
-  // 处理文件上传逻辑
+  // TODO: 实现文件上传功能
+  message.info('文件上传功能开发中')
 }
 </script>
 
@@ -21,7 +42,7 @@ function handleUpload() {
     <div class="input-container">
       <div class="input-wrapper">
         <a-textarea
-          v-model:value="message"
+          v-model:value="messageInput"
           placeholder="输入消息..."
           :auto-size="{ minRows: 1, maxRows: 4 }"
           class="message-input"
@@ -34,7 +55,7 @@ function handleUpload() {
           <a-button
             type="primary"
             class="action-btn send-button"
-            :disabled="!message.trim()"
+            :disabled="!messageInput.trim()"
             @click="handleSend"
           >
             <template #icon>
