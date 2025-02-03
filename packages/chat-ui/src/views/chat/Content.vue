@@ -1,128 +1,160 @@
-<script lang="ts" setup>
-import { ref } from 'vue'
+<script setup lang="ts">
+import { nextTick, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useChatStore } from '../../store'
+import type { Message } from '../../store/chat'
+import MessageItem from './components/message/MessageItem.vue'
 
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  avatar: string
+const messageListRef = ref<HTMLElement | null>(null)
+const store = useChatStore()
+const { currentMessages, loading } = storeToRefs(store)
+
+// 滚动到底部
+async function scrollToBottom() {
+  await nextTick()
+  if (messageListRef.value) {
+    const { scrollHeight } = messageListRef.value
+    messageListRef.value.scrollTop = scrollHeight
+  }
 }
 
-const messages = ref<Message[]>([
-  {
-    id: '1',
-    role: 'user',
-    content: '你好，我想了解一下Vue3的组合式API',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=user',
-  },
-  {
-    id: '2',
-    role: 'assistant',
-    content: '组合式 API (Composition API) 是 Vue 3 中一个重要的新特性。它提供了一种更灵活的方式来组织组件的逻辑。主要优势包括更好的代码组织、逻辑复用、更好的类型推导等。',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=assistant',
-  },
-])
+// 监听消息变化，自动滚动
+watch(currentMessages, () => {
+  scrollToBottom()
+})
+
+// 处理消息重试
+async function handleRetry(message: Message) {
+  // TODO: 实现消息重试逻辑
+  console.log('重试消息:', message)
+}
+
+// 处理消息复制
+async function handleCopy(content: string) {
+  try {
+    await navigator.clipboard.writeText(content)
+    // TODO: 添加复制成功提示
+  }
+  catch (err) {
+    console.error('复制失败:', err)
+    // TODO: 添加复制失败提示
+  }
+}
+
+onMounted(() => {
+  scrollToBottom()
+})
 </script>
 
 <template>
   <div class="chat-content">
-    <div
-      v-for="message in messages"
-      :key="message.id"
-      class="message-wrapper"
-      :class="{ 'message-user': message.role === 'user' }"
-    >
-      <div class="message-container">
-        <!-- 头像 -->
-        <div class="avatar-wrapper">
-          <img
-            :src="message.avatar"
-            :alt="message.role"
-            class="avatar"
-          >
-        </div>
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-wrapper">
+      <div class="loading-spinner" />
+      <span>正在思考...</span>
+    </div>
 
-        <!-- 消息内容 -->
-        <div class="message-box" :class="[message.role]">
-          <div class="message-content">
-            {{ message.content }}
-          </div>
+    <!-- 消息列表 -->
+    <div ref="messageListRef" class="message-list">
+      <template v-if="currentMessages.length">
+        <MessageItem
+          v-for="message in currentMessages"
+          :key="message.id"
+          :message="message"
+          @retry="handleRetry"
+          @copy="handleCopy"
+        />
+      </template>
+
+      <!-- 空状态 -->
+      <div v-else class="empty-state">
+        <div class="empty-icon">
+          💭
+        </div>
+        <div class="empty-text">
+          开始新的对话...
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<style scoped lang="less">
+<style lang="scss" scoped>
 .chat-content {
-  min-height: 100%;
-  padding: 2rem;
-  max-width: 48rem;
-  margin: 0 auto;
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background-color: #f5f5f5;
 
-  .message-wrapper {
+  .message-list {
+    height: 100%;
+    overflow-y: auto;
+    padding: 20px;
     display: flex;
-    margin-bottom: 2rem;
-    justify-content: flex-start;
+    flex-direction: column;
+    gap: 20px;
 
-    &.message-user {
-      justify-content: flex-end;
-
-      .message-container {
-        flex-direction: row-reverse;
-      }
-    }
-  }
-
-  .message-container {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-    max-width: 85%;
-  }
-
-  .avatar-wrapper {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 9999px;
-    overflow: hidden;
-    flex-shrink: 0;
-    border: 2px solid #fff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-    .avatar {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-  }
-
-  .message-box {
-    background-color: #fff;
-    border: 1px solid #eaeaea;
-    border-radius: 0.75rem;
-    padding: 1rem 1.25rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-    &.user {
-      background-color: #000;
-      border-color: #000;
-      .message-content {
-        color: #fff;
-      }
+    &::-webkit-scrollbar {
+      width: 4px;
     }
 
-    &.assistant {
-      background-color: #fff;
-      .message-content {
-        color: #000;
-      }
+    &::-webkit-scrollbar-thumb {
+      background-color: #ddd;
+      border-radius: 2px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background-color: transparent;
     }
   }
+}
 
-  .message-content {
-    font-size: 0.9375rem;
-    line-height: 1.5;
+.loading-wrapper {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 10;
+
+  .loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .empty-text {
+    font-size: 16px;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

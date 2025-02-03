@@ -5,14 +5,19 @@
     "target": "ES2022",
     "lib": ["ES2023"],
     "moduleDetection": "force",
+    "baseUrl": ".",
     "module": "ESNext",
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["node"], // 添加这一行
     "allowImportingTsExtensions": true,
 
     /* Linting */
-    "strict": true,
+    "strict": false,
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
