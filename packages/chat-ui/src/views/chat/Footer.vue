@@ -1,0 +1,142 @@
+<script lang="ts" setup>
+import { ref } from 'vue'
+import { PaperClipOutlined, SendOutlined } from '@ant-design/icons-vue'
+
+const message = ref('')
+
+function handleSend() {
+  if (!message.value.trim())
+    return
+  // 处理发送消息逻辑
+  message.value = ''
+}
+
+function handleUpload() {
+  // 处理文件上传逻辑
+}
+</script>
+
+<template>
+  <div class="chat-footer">
+    <div class="input-container">
+      <div class="input-wrapper">
+        <a-textarea
+          v-model:value="message"
+          placeholder="输入消息..."
+          :auto-size="{ minRows: 1, maxRows: 4 }"
+          class="message-input"
+          @keypress.enter.prevent="handleSend"
+        />
+        <div class="action-buttons">
+          <a-button type="text" class="action-btn upload-button" @click="handleUpload">
+            <PaperClipOutlined />
+          </a-button>
+          <a-button
+            type="primary"
+            class="action-btn send-button"
+            :disabled="!message.trim()"
+            @click="handleSend"
+          >
+            <template #icon>
+              <SendOutlined />
+            </template>
+          </a-button>
+        </div>
+      </div>
+      <div class="disclaimer">
+        免责声明：AI可能会产生错误信息，请自行判断和验证重要信息
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped lang="less">
+.chat-footer {
+  padding: 1rem 2rem 1.5rem;
+
+  .input-container {
+    max-width: 48rem;
+    margin: 0 auto;
+  }
+
+  .input-wrapper {
+    position: relative;
+    background-color: #fff;
+    border: 1px solid #eaeaea;
+    border-radius: 0.75rem;
+    transition: all 0.2s;
+
+    &:focus-within {
+      border-color: #000;
+      box-shadow: 0 0 0 1px #000;
+    }
+
+    .message-input {
+      border: none !important;
+      background: transparent !important;
+      padding: 0.875rem 7rem 0.875rem 1.25rem;
+      resize: none;
+      font-size: 0.9375rem;
+
+      &:focus {
+        box-shadow: none;
+      }
+
+      &::placeholder {
+        color: #999;
+      }
+    }
+  }
+
+  .action-buttons {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+  }
+
+  .action-btn {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+  }
+
+  .upload-button {
+    color: #666;
+
+    &:hover {
+      color: #000;
+      background-color: #fafafa;
+    }
+  }
+
+  .send-button {
+    background-color: #000;
+    border-color: #000;
+
+    &:hover {
+      background-color: #333;
+      border-color: #333;
+    }
+
+    &:disabled {
+      background-color: #fafafa;
+      border-color: #eaeaea;
+      color: #999;
+    }
+  }
+
+  .disclaimer {
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    text-align: center;
+    color: #666;
+  }
+}
+</style>

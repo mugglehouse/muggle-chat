@@ -8,9 +8,14 @@
   "keywords": [],
   "main": "main.ts",
   "scripts": {
-    "dev": "vite --port 8888"
+    "dev": "vite --port 8888",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "devDependencies": {
-    "naive-ui": "^2.41.0"
+  "dependencies": {
+    "ant-design-vue": "4.x",
+    "less": "^4.2.2",
+    "pinia": "^2.3.1",
+    "vue-router": "4"
   }
 }
