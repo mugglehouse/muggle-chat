@@ -13,11 +13,11 @@ import { STORAGE_KEYS } from '../config'
  * @property {'sending' | 'success' | 'error'} status - 消息发送状态
  */
 export interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: number
-  status: 'sending' | 'success' | 'error'
+  id: string // 消息唯一标识
+  role: 'user' | 'assistant' // 消息角色：用户/AI助手
+  content: string // 消息内容
+  timestamp: number // 时间戳
+  status: 'sending' | 'success' | 'error' // 消息状态
 }
 
 /**
@@ -30,11 +30,11 @@ export interface Message {
  * @property {number} updatedAt - 会话最后更新时间戳
  */
 export interface ChatSession {
-  id: string
-  title: string
-  messages: Message[]
-  createdAt: number
-  updatedAt: number
+  id: string // 会话唯一标识
+  title: string // 会话标题
+  messages: Message[] // 消息列表
+  createdAt: number // 创建时间
+  updatedAt: number // 更新时间
 }
 
 /**
@@ -122,6 +122,7 @@ export const useChatStore = defineStore('chat', () => {
    * @param content 消息内容
    */
   async function sendMessage(content: string) {
+    // 1. 输入验证
     if (!content.trim())
       return
 
@@ -149,6 +150,7 @@ export const useChatStore = defineStore('chat', () => {
     saveSessions()
 
     try {
+      // 4. 更新状态
       loading.value = true
       error.value = null
 
@@ -190,6 +192,7 @@ export const useChatStore = defineStore('chat', () => {
       const userIndex = finalMessages.findIndex(msg => msg.id === userMessage.id)
       const aiIndex = finalMessages.findIndex(msg => msg.id === aiMessage.id)
 
+      // 更新用户消息状态
       if (userIndex !== -1) {
         finalMessages[userIndex] = {
           ...finalMessages[userIndex],
@@ -197,6 +200,7 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
 
+      // 更新 AI 消息状态和内容
       if (aiIndex !== -1) {
         finalMessages[aiIndex] = {
           ...finalMessages[aiIndex],
@@ -230,6 +234,7 @@ export const useChatStore = defineStore('chat', () => {
       saveSessions()
     }
     finally {
+      // 10. 清理状态
       loading.value = false
     }
   }

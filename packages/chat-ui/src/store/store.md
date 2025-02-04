@@ -54,7 +54,7 @@ interface ChatSession {
 }
 ```
 
-## 状态管理
+## 核心状态
 
 ### 核心状态
 - `currentSessionId`：当前选中的会话 ID
@@ -67,7 +67,7 @@ interface ChatSession {
 - `currentMessages`：当前会话的消息列表
 - `sessionList`：简化的会话列表（用于侧边栏显示）
 
-## 功能实现
+## 工具函数
 
 ### 1. 会话管理
 
