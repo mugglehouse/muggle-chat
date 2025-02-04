@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "chat:dev": "pnpm -F @muggle-chat/chat-ui run dev",
+    "chat:build": "pnpm -F @muggle-chat/chat-ui run build",
+    "chat:preview": "pnpm -F @muggle-chat/chat-ui run preview"
   },
   "dependencies": {
     "@muggle-chat/chat-ui": "workspace:^",
