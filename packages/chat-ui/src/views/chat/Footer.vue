@@ -9,6 +9,7 @@ const messageInput = ref('')
 const chatStore = useChatStore()
 
 async function handleSend() {
+  // 如果输入框为空，则不发送消息
   if (!messageInput.value.trim())
     return
 
@@ -40,7 +41,9 @@ function handleUpload() {
 <template>
   <div class="chat-footer">
     <div class="input-container">
+      <!-- 输入框 -->
       <div class="input-wrapper">
+        <!-- 输入框 -->
         <a-textarea
           v-model:value="messageInput"
           placeholder="输入消息..."
@@ -48,10 +51,13 @@ function handleUpload() {
           class="message-input"
           @keypress.enter.prevent="handleSend"
         />
+        <!-- 按钮 -->
         <div class="action-buttons">
+          <!-- 上传按钮 -->
           <a-button type="text" class="action-btn upload-button" @click="handleUpload">
             <PaperClipOutlined />
           </a-button>
+          <!-- 发送按钮 -->
           <a-button
             type="primary"
             class="action-btn send-button"
@@ -64,6 +70,7 @@ function handleUpload() {
           </a-button>
         </div>
       </div>
+      <!-- 免责声明 -->
       <div class="disclaimer">
         免责声明：AI可能会产生错误信息，请自行判断和验证重要信息
       </div>

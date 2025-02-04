@@ -3,58 +3,81 @@ import { computed, ref } from 'vue'
 import { chatService } from '../api/chat'
 import { STORAGE_KEYS } from '../config'
 
+// ---------------------------- 类型定义 ----------------------------
+
+/**
+ * 消息类型
+ */
 export interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: number
-  status: 'sending' | 'success' | 'error'
+  id: string // 消息唯一标识
+  role: 'user' | 'assistant' // 消息角色：用户/AI助手
+  content: string // 消息内容
+  timestamp: number // 时间戳
+  status: 'sending' | 'success' | 'error' // 消息状态
 }
 
+/**
+ * 会话类型
+ */
 export interface ChatSession {
-  id: string
-  title: string
-  messages: Message[]
-  createdAt: number
-  updatedAt: number
+  id: string // 会话唯一标识
+  title: string // 会话标题
+  messages: Message[] // 消息列表
+  createdAt: number // 创建时间
+  updatedAt: number // 更新时间
 }
+
+// ---------------------------- Store 定义 ----------------------------
 
 export const useChatStore = defineStore('chat', () => {
-  // state
-  const currentSessionId = ref('')
-  const sessions = ref<ChatSession[]>([])
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  // ---------------------------- State ----------------------------
 
-  // 初始化时从本地存储加载会话
-  const initSessions = () => {
-    const savedSessions = localStorage.getItem(STORAGE_KEYS.sessions)
-    if (savedSessions) {
-      sessions.value = JSON.parse(savedSessions)
-      if (sessions.value.length > 0)
-        currentSessionId.value = sessions.value[0].id
-    }
-  }
+  const currentSessionId = ref('') // 当前会话ID
+  const sessions = ref<ChatSession[]>([]) // 会话列表
+  const loading = ref(false) // 加载状态
+  const error = ref<string | null>(null) // 错误信息
 
-  // 保存会话到本地存储
-  const saveSessions = () => {
-    localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(sessions.value))
-  }
+  // ---------------------------- Getters ----------------------------
 
-  // getters
+  /**
+   * 当前会话
+   */
   const currentSession = computed(() =>
     sessions.value.find(session => session.id === currentSessionId.value),
   )
 
+  /**
+   * 当前会话的消息列表
+   */
   const currentMessages = computed(() =>
     currentSession.value?.messages || [],
   )
 
+  /**
+   * 会话列表（简化版，用于显示）
+   */
   const sessionList = computed(() =>
     sessions.value.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })),
   )
 
-  // actions
+  // ---------------------------- 工具函数 ----------------------------
+
+  /**
+   * 创建新消息
+   */
+  function createMessage(role: Message['role'], content: string): Message {
+    return {
+      id: Date.now().toString(),
+      role,
+      content,
+      timestamp: Date.now(),
+      status: 'sending',
+    }
+  }
+
+  /**
+   * 创建新会话
+   */
   function createSession() {
     const newSession: ChatSession = {
       id: Date.now().toString(),
@@ -68,60 +91,102 @@ export const useChatStore = defineStore('chat', () => {
     saveSessions()
   }
 
+  // ---------------------------- 存储操作 ----------------------------
+
+  /**
+   * 保存会话到本地存储
+   */
+  function saveSessions() {
+    localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(sessions.value))
+  }
+
+  /**
+   * 从本地存储加载会话
+   */
+  function initSessions() {
+    const savedSessions = localStorage.getItem(STORAGE_KEYS.sessions)
+    if (savedSessions) {
+      sessions.value = JSON.parse(savedSessions)
+      if (sessions.value.length > 0)
+        currentSessionId.value = sessions.value[0].id
+    }
+  }
+
+  // ---------------------------- 会话管理 ----------------------------
+
+  /**
+   * 切换当前会话
+   */
   function switchSession(sessionId: string) {
     currentSessionId.value = sessionId
   }
 
+  /**
+   * 清空当前会话
+   */
+  function clearCurrentSession() {
+    const session = sessions.value.find(s => s.id === currentSessionId.value)
+    if (session) {
+      session.messages = []
+      session.updatedAt = Date.now()
+      saveSessions()
+    }
+  }
+
+  /**
+   * 删除会话
+   */
+  function deleteSession(sessionId: string) {
+    const index = sessions.value.findIndex(s => s.id === sessionId)
+    if (index > -1) {
+      sessions.value.splice(index, 1)
+      if (sessionId === currentSessionId.value)
+        currentSessionId.value = sessions.value[0]?.id || ''
+      saveSessions()
+    }
+  }
+
+  // ---------------------------- 消息处理 ----------------------------
+
+  /**
+   * 发送消息
+   * @param content 消息内容
+   */
   async function sendMessage(content: string) {
+    // 1. 输入验证
     if (!content.trim())
       return
 
-    // 如果没有当前会话，创建一个新会话
+    // 2. 准备会话
     if (!currentSessionId.value)
       createSession()
 
-    // 创建用户消息
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-      status: 'sending',
-    }
-
-    // 添加到当前会话
     const session = sessions.value.find(s => s.id === currentSessionId.value)
     if (!session)
       return
 
-    // 使用数组方法触发响应式更新
+    // 3. 创建用户消息
+    const userMessage = createMessage('user', content)
     session.messages = [...session.messages, userMessage]
     session.updatedAt = Date.now()
     saveSessions()
 
     try {
+      // 4. 更新状态
       loading.value = true
       error.value = null
 
-      // 创建 AI 消息占位
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '',
-        timestamp: Date.now(),
-        status: 'sending',
-      }
-
-      // 使用数组方法触发响应式更新
+      // 5. 创建 AI 消息占位
+      const aiMessage = createMessage('assistant', '')
       session.messages = [...session.messages, aiMessage]
       saveSessions()
 
-      // 发送请求
+      // 6. 发送请求
       const response = await chatService.sendStreamMessage(
         session.messages.slice(0, -1), // 不包含占位消息
         {},
         (text) => {
-          // 创建新的消息数组来触发响应式更新
+          // 实时更新 AI 消息内容
           const messageIndex = session.messages.findIndex(msg => msg.id === aiMessage.id)
           if (messageIndex !== -1) {
             const updatedMessages = [...session.messages]
@@ -136,11 +201,12 @@ export const useChatStore = defineStore('chat', () => {
         },
       )
 
-      // 更新消息状态
+      // 7. 更新最终状态
       const finalMessages = [...session.messages]
       const userIndex = finalMessages.findIndex(msg => msg.id === userMessage.id)
       const aiIndex = finalMessages.findIndex(msg => msg.id === aiMessage.id)
 
+      // 更新用户消息状态
       if (userIndex !== -1) {
         finalMessages[userIndex] = {
           ...finalMessages[userIndex],
@@ -148,6 +214,7 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
 
+      // 更新 AI 消息状态和内容
       if (aiIndex !== -1) {
         finalMessages[aiIndex] = {
           ...finalMessages[aiIndex],
@@ -159,14 +226,14 @@ export const useChatStore = defineStore('chat', () => {
       session.messages = finalMessages
       session.updatedAt = Date.now()
 
-      // 如果是第一条消息，更新会话标题
+      // 8. 更新会话标题（如果是第一条消息）
       if (session.messages.length === 2)
         session.title = content.slice(0, 20) + (content.length > 20 ? '...' : '')
 
       saveSessions()
     }
     catch (err) {
-      // 更新错误状态
+      // 9. 错误处理
       const errorMessages = [...session.messages]
       const userIndex = errorMessages.findIndex(msg => msg.id === userMessage.id)
       if (userIndex !== -1) {
@@ -181,44 +248,26 @@ export const useChatStore = defineStore('chat', () => {
       saveSessions()
     }
     finally {
+      // 10. 清理状态
       loading.value = false
-    }
-  }
-
-  function clearCurrentSession() {
-    const session = sessions.value.find(s => s.id === currentSessionId.value)
-    if (session) {
-      session.messages = []
-      session.updatedAt = Date.now()
-      saveSessions()
-    }
-  }
-
-  function deleteSession(sessionId: string) {
-    const index = sessions.value.findIndex(s => s.id === sessionId)
-    if (index > -1) {
-      sessions.value.splice(index, 1)
-      if (sessionId === currentSessionId.value)
-        currentSessionId.value = sessions.value[0]?.id || ''
-
-      saveSessions()
     }
   }
 
   // 初始化
   initSessions()
 
+  // ---------------------------- 导出接口 ----------------------------
   return {
-    // state
+    // State
     currentSessionId,
     sessions,
     loading,
     error,
-    // getters
+    // Getters
     currentSession,
     currentMessages,
     sessionList,
-    // actions
+    // Actions
     createSession,
     switchSession,
     sendMessage,

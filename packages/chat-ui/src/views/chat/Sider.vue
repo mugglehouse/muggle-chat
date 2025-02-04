@@ -2,34 +2,35 @@
 import { ref } from 'vue'
 import { MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined, PlusOutlined } from '@ant-design/icons-vue'
 
-const props = defineProps<{
-  collapsed: boolean
-}>()
+// 展开收起状态
+const collapsed = defineModel<boolean>()
 
-const emit = defineEmits<{
-  'update:collapsed': [value: boolean]
-}>()
-
+// 选中状态
 const selectedKeys = ref<string[]>(['1'])
+
+// 对话列表
 const chatList = ref([
   { id: '1', title: '关于Vue3的讨论' },
   { id: '2', title: 'TypeScript学习笔记' },
   { id: '3', title: '项目架构设计' },
 ])
 
+// 新建对话
 function handleNewChat() {
   // 处理新建对话逻辑
 }
 
+// 展开收起事件
 function toggleCollapse() {
-  emit('update:collapsed', !props.collapsed)
+  collapsed.value = !collapsed.value
 }
 </script>
 
 <template>
   <div class="chat-sider">
+    <!-- 新建对话 -->
     <div class="sider-header">
-      <a-button
+      <AButton
         type="primary"
         class="new-chat-btn"
         @click="handleNewChat"
@@ -38,7 +39,7 @@ function toggleCollapse() {
           <PlusOutlined />
         </template>
         <span v-if="!collapsed">新建对话</span>
-      </a-button>
+      </AButton>
     </div>
 
     <!-- 对话列表 -->
@@ -59,10 +60,10 @@ function toggleCollapse() {
 
     <!-- 底部折叠按钮 -->
     <div class="sider-footer">
-      <a-button type="text" class="collapse-btn" @click="toggleCollapse">
+      <AButton type="text" class="collapse-btn" @click="toggleCollapse">
         <MenuFoldOutlined v-if="!collapsed" />
         <MenuUnfoldOutlined v-else />
-      </a-button>
+      </AButton>
     </div>
 
     <!-- 固定的展开按钮 -->

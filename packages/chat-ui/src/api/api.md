@@ -1,228 +1,180 @@
 # Chat API 服务设计文档
 
-## 服务职责
+## 概述
 
-Chat API 服务负责：
-1. 与 OpenAI API 通信
-2. 处理消息发送和接收
-3. 管理 API 配置
-4. 处理流式响应
+Chat API 服务是一个封装了 OpenAI API 调用的模块，提供了以下核心功能：
+- 消息发送（普通消息和流式消息）
+- API 密钥管理
+- 错误处理
+- 请求/响应拦截
+- SSE（Server-Sent Events）处理
 
-## 配置项
+## 技术栈
 
+- Axios：HTTP 客户端
+- TypeScript：类型系统
+- SSE：流式数据处理
+- LocalStorage：本地存储
+
+## 核心功能
+
+### 1. 消息发送
+
+#### 1.1 普通消息
 ```typescript
-// API 基础配置
-const API_CONFIG = {
-  baseURL: import.meta.env.VITE_OPENAI_API_URL,
-  model: import.meta.env.VITE_OPENAI_API_MODEL,
-  temperature: Number(import.meta.env.VITE_OPENAI_API_TEMPERATURE),
-}
+async sendMessage(messages: Message[], options = {}): Promise<ChatMessage>
 ```
+- 功能：发送单次请求并获取完整响应
+- 参数：
+  - messages：消息历史记录
+  - options：配置选项（可选）
+- 返回：助手的响应消息
+- 错误处理：统一处理网络错误和 API 错误
 
-## 类型定义
-
-### 请求类型
-```typescript
-interface ChatCompletionRequest {
-  model: string                // 使用的模型
-  messages: {                  // 消息历史
-    role: 'system' | 'user' | 'assistant'
-    content: string
-  }[]
-  temperature?: number        // 温度参数
-  stream?: boolean           // 是否使用流式响应
-}
-```
-
-### 响应类型
-```typescript
-interface ChatCompletionResponse {
-  id: string
-  choices: {
-    message: {
-      role: 'assistant'
-      content: string
-    }
-    finish_reason: string
-  }[]
-}
-```
-
-## 功能实现
-
-### 1. API 实例配置
-```typescript
-const chatAPI = axios.create({
-  baseURL: API_CONFIG.baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// 添加 API Key
-chatAPI.interceptors.request.use((config) => {
-  const apiKey = localStorage.getItem(STORAGE_KEYS.apiKey)
-  if (apiKey) {
-    config.headers.Authorization = `Bearer ${apiKey}`
-    config.headers['x-requested-with'] = 'XMLHttpRequest'
-  }
-  return config
-})
-```
-
-### 2. 普通消息发送
-```typescript
-async sendMessage(messages: Message[], options = {}) {
-  const request = {
-    model: API_CONFIG.model,
-    messages: messages.map(msg => ({
-      role: msg.role,
-      content: msg.content,
-    })),
-    temperature: API_CONFIG.temperature,
-    ...options,
-  }
-  
-  const response = await chatAPI.post('/chat/completions', request)
-  return response.data.choices[0].message
-}
-```
-
-### 3. 流式消息处理
+#### 1.2 流式消息
 ```typescript
 async sendStreamMessage(
   messages: Message[],
   options = {},
   onProgress?: (text: string) => void,
-) {
-  const request = {
-    model: API_CONFIG.model,
-    messages,
-    temperature: API_CONFIG.temperature,
-    stream: true,
-    ...options,
-  }
+): Promise<ChatMessage>
+```
+- 功能：使用 SSE 获取实时响应
+- 参数：
+  - messages：消息历史记录
+  - options：配置选项（可选）
+  - onProgress：进度回调函数
+- 返回：完整的响应消息
+- 特点：
+  - 实时响应
+  - 增量更新
+  - 错误恢复
 
-  const response = await fetch(`${API_CONFIG.baseURL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'Accept': 'text/event-stream',
-    },
-    body: JSON.stringify(request),
-  })
+### 2. 配置管理
 
-  // 处理流式响应
-  const text = await response.text()
-  const lines = text.split('\n')
-  let responseText = ''
-
-  for (const line of lines) {
-    if (line.startsWith('data: ')) {
-      const data = line.slice(6)
-      if (data === '[DONE]') continue
-
-      const parsed = JSON.parse(data)
-      const content = parsed.choices[0]?.delta?.content || ''
-      if (content) {
-        responseText += content
-        onProgress?.(responseText)
-      }
-    }
-  }
-
-  return {
-    role: 'assistant',
-    content: responseText,
-  }
+#### 2.1 基础配置
+```typescript
+const API_CONFIG = {
+  baseURL: string       // API 基础地址
+  model: string        // 使用的模型
+  temperature: number  // 温度参数
 }
 ```
 
-## API 方法
+#### 2.2 API Key 管理
+```typescript
+setApiKey(apiKey: string): void    // 设置 API Key
+getApiKey(): string | null         // 获取 API Key
+```
 
-1. **sendMessage**
-   - 发送普通消息
-   - 返回完整响应
-   - 支持自定义选项
+### 3. 请求处理
 
-2. **sendStreamMessage**
-   - 发送流式消息
-   - 支持进度回调
-   - 实时返回内容
+#### 3.1 请求拦截器
+- 自动添加认证信息
+- 设置请求头
+- 错误处理
 
-3. **setApiKey/getApiKey**
-   - 管理 API Key
-   - 本地存储集成
-   - 安全处理
+#### 3.2 响应拦截器
+- 统一的错误处理
+- 友好的错误信息
+- 错误状态码映射
+
+## 数据类型
+
+### 1. 消息类型
+```typescript
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+```
+
+### 2. 请求类型
+```typescript
+interface ChatCompletionRequest {
+  model: string
+  messages: ChatMessage[]
+  temperature?: number
+  stream?: boolean
+}
+```
+
+### 3. 响应类型
+```typescript
+interface ChatCompletionResponse {
+  id: string
+  choices: {
+    message: ChatMessage
+    finish_reason: string
+  }[]
+}
+```
+
+### 4. 流式响应类型
+```typescript
+interface ChatStreamResponse {
+  id: string
+  choices: {
+    delta: {
+      content?: string
+    }
+    finish_reason?: string
+  }[]
+}
+```
 
 ## 错误处理
 
-1. **网络错误**
-   - 请求超时
-   - 连接失败
-   - 服务器错误
+### 1. 错误类型
+- 401：API Key 无效或过期
+- 403：权限不足
+- 429：请求频率限制
+- 500：服务器错误
+- 网络错误
+- 解析错误
 
-2. **认证错误**
-   - API Key 无效
-   - 权限不足
-   - 认证过期
-
-3. **响应解析错误**
-   - JSON 解析失败
-   - 数据格式错误
-   - 流式数据处理错误
-
-## 安全考虑
-
-1. **API Key 管理**
-   - 本地安全存储
-   - 请求时动态获取
-   - 不进行加密存储
-
-2. **请求安全**
-   - HTTPS 传输
-   - 添加 CSRF 防护
-   - 验证响应来源
+### 2. 错误处理策略
+- 统一的错误拦截
+- 友好的错误提示
+- 错误日志记录
+- 错误恢复机制
 
 ## 性能优化
 
-1. **请求优化**
-   - 避免重复请求
-   - 合理的超时设置
-   - 错误重试机制
+### 1. 请求优化
+- 超时控制（60秒）
+- 请求取消支持
+- 错误重试机制
 
-2. **响应处理**
-   - 流式数据高效处理
-   - 增量更新优化
-   - 内存使用优化
+### 2. 数据处理优化
+- 增量更新
+- 数据缓存
+- 内存管理
 
-## 最佳实践
+## 安全性
 
-1. **API Key 使用**
-   - 及时验证有效性
-   - 错误提示友好化
-   - 支持快速更新
+### 1. API Key 安全
+- 本地存储
+- 请求时动态获取
+- 传输加密
 
-2. **流式响应**
-   - 实时显示响应
-   - 优雅降级处理
-   - 完整性保证
-
-3. **错误处理**
-   - 详细的错误信息
-   - 用户友好提示
-   - 日志记录完善
+### 2. 请求安全
+- HTTPS
+- CSRF 防护
+- XSS 防护
 
 ## 使用示例
 
+### 1. 发送普通消息
 ```typescript
-// 发送普通消息
 const response = await chatService.sendMessage([
   { role: 'user', content: '你好' }
 ])
+console.log(response.content)
+```
 
-// 发送流式消息
+### 2. 发送流式消息
+```typescript
 await chatService.sendStreamMessage(
   [{ role: 'user', content: '你好' }],
   {},
@@ -230,50 +182,52 @@ await chatService.sendStreamMessage(
     console.log('实时响应:', text)
   }
 )
-
-// 设置 API Key
-chatService.setApiKey('your-api-key')
 ```
 
-## 待办事项
+### 3. API Key 管理
+```typescript
+// 设置 API Key
+chatService.setApiKey('your-api-key')
 
-1. 功能完善
-   - [ ] 添加更多模型支持
-   - [ ] 实现重试机制
-   - [ ] 添加请求超时处理
-   - [ ] 支持并发请求限制
+// 获取 API Key
+const apiKey = chatService.getApiKey()
+```
 
-2. 错误处理
-   - [ ] 完善错误类型
-   - [ ] 添加错误重试
-   - [ ] 优化错误提示
-   - [ ] 实现错误日志
+## 最佳实践
 
-3. 性能优化
-   - [ ] 添加请求缓存
-   - [ ] 优化流式处理
-   - [ ] 实现请求队列
-   - [ ] 添加请求取消支持
+### 1. 错误处理
+- 始终使用 try-catch 包装 API 调用
+- 提供友好的错误提示
+- 实现错误恢复机制
 
-4. 安全性
-   - [ ] 加密 API Key
-   - [ ] 添加请求验证
-   - [ ] 实现速率限制
-   - [ ] 添加安全检查
+### 2. 流式处理
+- 实现进度回调
+- 处理断线重连
+- 优化内存使用
+
+### 3. 性能优化
+- 合理设置超时时间
+- 实现请求缓存
+- 控制并发请求
 
 ## 注意事项
 
-1. **API 密钥管理**
-   - 安全存储
+1. **API Key 管理**
    - 定期更新
-   - 访问控制
+   - 安全存储
+   - 权限控制
 
 2. **错误处理**
-   - 网络错误
-   - API 限制
-   - 响应超时
+   - 完整的错误捕获
+   - 友好的错误提示
+   - 错误日志记录
 
 3. **性能考虑**
-   - 避免重复请求
+   - 避免内存泄漏
+   - 控制请求频率
    - 优化数据处理
-   - 控制并发数量 
+
+4. **安全性**
+   - 数据加密
+   - 输入验证
+   - 权限检查

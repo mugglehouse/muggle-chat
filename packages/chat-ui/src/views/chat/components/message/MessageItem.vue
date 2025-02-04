@@ -10,7 +10,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// 消息操作
+// 触发事件
 const emit = defineEmits<{
   retry: [message: Message]
   copy: [content: string]
@@ -37,10 +37,11 @@ const avatarConfig = computed(() => ({
   },
 })[props.message.role])
 
+// 重试
 function handleRetry() {
   emit('retry', props.message)
 }
-
+// 复制
 function handleCopy() {
   emit('copy', props.message.content)
 }

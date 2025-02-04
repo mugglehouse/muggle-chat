@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { chatService } from '../../api/chat'
 
@@ -37,7 +37,7 @@ async function saveApiKey() {
   catch (err) {
     error.value = err instanceof Error ? err.message : '保存 API Key 失败'
     message.error(error.value)
-    console.error('保存 API Key 失败:', err)
+    // console.error('保存 API Key 失败:', err)
   }
 }
 
@@ -48,12 +48,15 @@ function initApiKey() {
     apiKey.value = savedApiKey
 }
 
-initApiKey()
+onMounted(() => {
+  initApiKey()
+})
 </script>
 
 <template>
   <div class="api-key-settings">
     <h3>API 设置</h3>
+    <!-- 输入框 -->
     <div class="input-group">
       <input
         v-model="apiKey"
@@ -65,12 +68,15 @@ initApiKey()
         保存
       </button>
     </div>
+    <!-- 错误提示 -->
     <p v-if="error" class="error-message">
       {{ error }}
     </p>
+    <!-- 成功提示 -->
     <p v-if="success" class="success-message">
       API Key 已保存
     </p>
+    <!-- 提示 -->
     <div class="tips">
       <p>提示：</p>
       <ul>
