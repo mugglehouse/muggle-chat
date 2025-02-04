@@ -1,20 +1,24 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { message } from 'ant-design-vue'
 import { useChatStore } from '../../store/chat'
 import type { Message } from '../../store/chat'
 import MessageItem from './components/message/MessageItem.vue'
 
+// 消息列表框元素
 const messageListRef = ref<HTMLElement | null>(null)
 const store = useChatStore()
 const { currentMessages, loading } = storeToRefs(store)
 
 // 滚动到底部
 async function scrollToBottom() {
+  // scrollHeight为消息列表框的总高度（包括溢出页面部分），cilentHeight为消息列表框的可见高度，scrollTop为滚动距离
+  // 当scrollTop + clientHeight = scrollHeight时，说明滚动到底部
   await nextTick()
   if (messageListRef.value) {
-    const { scrollHeight } = messageListRef.value
-    messageListRef.value.scrollTop = scrollHeight
+    const { scrollHeight, clientHeight } = messageListRef.value
+    messageListRef.value.scrollTop = scrollHeight - clientHeight
   }
 }
 
@@ -22,14 +26,23 @@ async function scrollToBottom() {
 watch(
   currentMessages,
   (newMessages, oldMessages) => {
-    // 检查是否有新消息或消息内容更新
-    const hasNewMessage = newMessages.length !== oldMessages?.length
-    const hasContentUpdate = newMessages.some((msg, index) => {
-      const oldMsg = oldMessages?.[index]
-      return oldMsg && (msg.content !== oldMsg.content || msg.status !== oldMsg.status)
-    })
+    // 如果是首次加载消息
+    if (!oldMessages) {
+      scrollToBottom()
+      return
+    }
 
-    if (hasNewMessage || hasContentUpdate) {
+    // 只关注最后一条消息的变化
+    const lastNewMsg = newMessages[newMessages.length - 1]
+    const lastOldMsg = oldMessages[oldMessages.length - 1]
+
+    // 在以下情况需要滚动到底部：
+    // 1. 新增了消息（最后一条消息ID不同）
+    // 2. 最后一条消息的内容发生变化
+    if (
+      lastNewMsg?.id !== lastOldMsg?.id
+      || lastNewMsg?.content !== lastOldMsg?.content
+    ) {
       console.log('消息更新，滚动到底部')
       scrollToBottom()
     }
@@ -47,17 +60,12 @@ async function handleRetry(message: Message) {
 async function handleCopy(content: string) {
   try {
     await navigator.clipboard.writeText(content)
-    // TODO: 添加复制成功提示
+    message.success('复制成功')
   }
   catch (err) {
-    console.error('复制失败:', err)
-    // TODO: 添加复制失败提示
+    message.error('复制失败')
   }
 }
-
-onMounted(() => {
-  scrollToBottom()
-})
 </script>
 
 <template>
@@ -72,9 +80,9 @@ onMounted(() => {
     <div ref="messageListRef" class="message-list">
       <template v-if="currentMessages.length">
         <MessageItem
-          v-for="message in currentMessages"
-          :key="message.id"
-          :message="message"
+          v-for="msg in currentMessages"
+          :key="msg.id"
+          :message="msg"
           @retry="handleRetry"
           @copy="handleCopy"
         />

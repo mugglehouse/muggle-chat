@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, nextTick, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 
 interface Props {
   content: string
-  inline?: boolean
 }
 
 const props = defineProps<Props>()
 
-// 创建 markdown-it 实例
+// 1. 创建 markdown-it 实例
 const md = new MarkdownIt({
   html: false, // 禁用 HTML 标签
   breaks: true, // 转换换行符为 <br>
   linkify: true, // 自动转换 URL 为链接
+  // 当md中出现代码块时(str为代码块内容，lang为代码块语言)，使用highlight函数进行高亮
   highlight: (str: string, lang: string) => {
+    // 如果lang存在且hljs支持该语言，则使用hljs进行高亮
     if (lang && hljs.getLanguage(lang)) {
       try {
         return hljs.highlight(str, { language: lang }).value
@@ -29,23 +30,30 @@ const md = new MarkdownIt({
   },
 })
 
-// 计算渲染后的内容
+// 2. 计算渲染后的内容
 const renderedContent = computed(() => {
   if (!props.content)
     return ''
-  return props.inline
-    ? md.renderInline(props.content)
-    : md.render(props.content)
+  return md.render(props.content)
 })
 
-// 复制代码块
+// 3. 复制代码块
 function setupCodeCopy() {
+  // pre为HTML元素，用于预格式化文本，markdown-it会将代码块内容使用pre包裹，并将代码块转化为HTML结构显示
+  // <pre>
+  //   <code>
+  //       代码块
+  //   </code>
+  // </pre>
   const preElements = document.querySelectorAll('pre')
+  // 为每一个pre元素添加复制按钮（每一个代码块）
   preElements.forEach((pre) => {
     // 添加复制按钮
     const copyButton = document.createElement('button')
     copyButton.className = 'copy-button'
     copyButton.textContent = '复制'
+    pre.appendChild(copyButton)
+    // 添加点击事件
     copyButton.addEventListener('click', async () => {
       const code = pre.querySelector('code')?.textContent || ''
       try {
@@ -60,20 +68,22 @@ function setupCodeCopy() {
         copyButton.textContent = '复制失败'
       }
     })
-    pre.appendChild(copyButton)
   })
 }
 
-onMounted(() => {
-  if (!props.inline)
+// 4. 监听内容变化，在内容更新后重新设置复制按钮
+watch(renderedContent, () => {
+  // 使用 nextTick 确保 DOM 已更新
+  nextTick(() => {
     setupCodeCopy()
-})
+  })
+}, { immediate: true })
 </script>
 
 <template>
+  <!-- v-html将HTML字符串解析为原生HTML -->
   <div
     class="markdown-content"
-    :class="{ inline }"
     v-html="renderedContent"
   />
 </template>
@@ -157,15 +167,6 @@ onMounted(() => {
 
     th {
       background-color: #f6f8fa;
-    }
-  }
-
-  &.inline {
-    display: inline;
-
-    :deep(p) {
-      display: inline;
-      margin: 0;
     }
   }
 }

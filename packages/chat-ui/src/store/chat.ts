@@ -3,6 +3,15 @@ import { computed, ref } from 'vue'
 import { chatService } from '../api/chat'
 import { STORAGE_KEYS } from '../config'
 
+/**
+ * 消息接口定义
+ * @interface Message
+ * @property {string} id - 消息唯一标识符
+ * @property {'user' | 'assistant'} role - 消息发送者角色
+ * @property {string} content - 消息内容
+ * @property {number} timestamp - 消息发送时间戳
+ * @property {'sending' | 'success' | 'error'} status - 消息发送状态
+ */
 export interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -11,6 +20,15 @@ export interface Message {
   status: 'sending' | 'success' | 'error'
 }
 
+/**
+ * 聊天会话接口定义
+ * @interface ChatSession
+ * @property {string} id - 会话唯一标识符
+ * @property {string} title - 会话标题
+ * @property {Message[]} messages - 会话中的消息列表
+ * @property {number} createdAt - 会话创建时间戳
+ * @property {number} updatedAt - 会话最后更新时间戳
+ */
 export interface ChatSession {
   id: string
   title: string
@@ -19,14 +37,21 @@ export interface ChatSession {
   updatedAt: number
 }
 
+/**
+ * 聊天状态管理 Store
+ * 使用 Pinia 的组合式 API 定义 Store
+ */
 export const useChatStore = defineStore('chat', () => {
-  // state
-  const currentSessionId = ref('')
-  const sessions = ref<ChatSession[]>([])
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  // === State 定义 ===
+  const currentSessionId = ref('') // 当前选中的会话 ID
+  const sessions = ref<ChatSession[]>([]) // 所有会话列表
+  const loading = ref(false) // 加载状态标识
+  const error = ref<string | null>(null) // 错误信息
 
-  // 初始化时从本地存储加载会话
+  /**
+   * 初始化函数：从本地存储加载会话数据
+   * 在 Store 创建时自动执行
+   */
   const initSessions = () => {
     const savedSessions = localStorage.getItem(STORAGE_KEYS.sessions)
     if (savedSessions) {
@@ -36,25 +61,41 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // 保存会话到本地存储
+  /**
+   * 将会话数据保存到本地存储
+   * 在每次会话数据更新时调用
+   */
   const saveSessions = () => {
     localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(sessions.value))
   }
 
-  // getters
+  // === Getters ===
+  /**
+   * 获取当前选中的会话对象
+   */
   const currentSession = computed(() =>
     sessions.value.find(session => session.id === currentSessionId.value),
   )
 
+  /**
+   * 获取当前会话的消息列表
+   */
   const currentMessages = computed(() =>
     currentSession.value?.messages || [],
   )
 
+  /**
+   * 获取会话列表的简化信息（用于侧边栏显示）
+   */
   const sessionList = computed(() =>
     sessions.value.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })),
   )
 
-  // actions
+  // === Actions ===
+  /**
+   * 创建新的会话
+   * 会自动切换到新创建的会话
+   */
   function createSession() {
     const newSession: ChatSession = {
       id: Date.now().toString(),
@@ -68,19 +109,27 @@ export const useChatStore = defineStore('chat', () => {
     saveSessions()
   }
 
+  /**
+   * 切换当前选中的会话
+   * @param sessionId 目标会话的 ID
+   */
   function switchSession(sessionId: string) {
     currentSessionId.value = sessionId
   }
 
+  /**
+   * 发送消息并处理响应
+   * @param content 消息内容
+   */
   async function sendMessage(content: string) {
     if (!content.trim())
       return
 
-    // 如果没有当前会话，创建一个新会话
+    // 确保有当前会话，没有则创建新会话
     if (!currentSessionId.value)
       createSession()
 
-    // 创建用户消息
+    // 创建用户消息对象
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -89,12 +138,12 @@ export const useChatStore = defineStore('chat', () => {
       status: 'sending',
     }
 
-    // 添加到当前会话
+    // 获取当前会话
     const session = sessions.value.find(s => s.id === currentSessionId.value)
     if (!session)
       return
 
-    // 使用数组方法触发响应式更新
+    // 添加用户消息到会话
     session.messages = [...session.messages, userMessage]
     session.updatedAt = Date.now()
     saveSessions()
@@ -103,7 +152,7 @@ export const useChatStore = defineStore('chat', () => {
       loading.value = true
       error.value = null
 
-      // 创建 AI 消息占位
+      // 创建 AI 响应消息占位
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -112,16 +161,16 @@ export const useChatStore = defineStore('chat', () => {
         status: 'sending',
       }
 
-      // 使用数组方法触发响应式更新
+      // 添加 AI 消息到会话
       session.messages = [...session.messages, aiMessage]
       saveSessions()
 
-      // 发送请求
+      // 发送请求并处理流式响应
       const response = await chatService.sendStreamMessage(
         session.messages.slice(0, -1), // 不包含占位消息
         {},
         (text) => {
-          // 创建新的消息数组来触发响应式更新
+          // 实时更新 AI 响应内容
           const messageIndex = session.messages.findIndex(msg => msg.id === aiMessage.id)
           if (messageIndex !== -1) {
             const updatedMessages = [...session.messages]
@@ -136,7 +185,7 @@ export const useChatStore = defineStore('chat', () => {
         },
       )
 
-      // 更新消息状态
+      // 更新消息最终状态
       const finalMessages = [...session.messages]
       const userIndex = finalMessages.findIndex(msg => msg.id === userMessage.id)
       const aiIndex = finalMessages.findIndex(msg => msg.id === aiMessage.id)
@@ -159,14 +208,14 @@ export const useChatStore = defineStore('chat', () => {
       session.messages = finalMessages
       session.updatedAt = Date.now()
 
-      // 如果是第一条消息，更新会话标题
+      // 如果是会话的第一条消息，使用用户输入内容更新会话标题
       if (session.messages.length === 2)
         session.title = content.slice(0, 20) + (content.length > 20 ? '...' : '')
 
       saveSessions()
     }
     catch (err) {
-      // 更新错误状态
+      // 错误处理：更新消息状态
       const errorMessages = [...session.messages]
       const userIndex = errorMessages.findIndex(msg => msg.id === userMessage.id)
       if (userIndex !== -1) {
@@ -185,6 +234,9 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /**
+   * 清空当前会话的所有消息
+   */
   function clearCurrentSession() {
     const session = sessions.value.find(s => s.id === currentSessionId.value)
     if (session) {
@@ -194,10 +246,15 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /**
+   * 删除指定的会话
+   * @param sessionId 要删除的会话 ID
+   */
   function deleteSession(sessionId: string) {
     const index = sessions.value.findIndex(s => s.id === sessionId)
     if (index > -1) {
       sessions.value.splice(index, 1)
+      // 如果删除的是当前会话，切换到第一个会话或清空当前会话 ID
       if (sessionId === currentSessionId.value)
         currentSessionId.value = sessions.value[0]?.id || ''
 
@@ -205,20 +262,21 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // 初始化
+  // 初始化 Store
   initSessions()
 
+  // 导出 Store 接口
   return {
-    // state
+    // State
     currentSessionId,
     sessions,
     loading,
     error,
-    // getters
+    // Getters
     currentSession,
     currentMessages,
     sessionList,
-    // actions
+    // Actions
     createSession,
     switchSession,
     sendMessage,

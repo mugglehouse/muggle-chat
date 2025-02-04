@@ -12,7 +12,7 @@ const siderCollapsed = ref(false)
   <div class="app-container">
     <!-- 侧边栏 -->
     <aside class="app-sider" :class="{ collapsed: siderCollapsed }">
-      <Sider v-model:collapsed="siderCollapsed" />
+      <Sider v-model="siderCollapsed" />
     </aside>
 
     <!-- 主内容区 -->

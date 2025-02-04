@@ -16,11 +16,15 @@ function closeSettings() {
 
 <template>
   <div class="chat-header">
+    <!-- logo -->
     <h1 class="logo">
       Muggle Chat
     </h1>
+
+    <!-- 个人中心 -->
     <div class="actions">
       <a-dropdown placement="bottomRight">
+        <!-- 头像 -->
         <div class="avatar-wrapper">
           <a-avatar class="avatar">
             <template #icon>
@@ -28,6 +32,7 @@ function closeSettings() {
             </template>
           </a-avatar>
         </div>
+        <!-- 下拉框 -->
         <template #overlay>
           <a-menu class="user-menu">
             <a-menu-item key="settings" @click="openSettings">

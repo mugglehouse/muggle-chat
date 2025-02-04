@@ -1,19 +1,49 @@
-# Store 状态管理设计文档
+# Chat Store 设计文档
 
-## 状态结构
+## 整体架构
 
-### 消息类型
+聊天状态管理采用 Pinia 组合式 API 设计，主要管理聊天会话和消息的状态。Store 分为以下几个主要部分：
+
+- State：核心状态管理
+- Getters：计算属性
+- Actions：状态操作方法
+- 工具函数：辅助功能
+- 本地存储：持久化处理
+
+```typescript
+export const useChatStore = defineStore('chat', () => {
+  // State 管理
+  const currentSessionId = ref('')
+  const sessions = ref<ChatSession[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  // Getters 计算属性
+  const currentSession = computed(() => sessions.value.find(session => session.id === currentSessionId.value))
+  const currentMessages = computed(() => currentSession.value?.messages || [])
+  const sessionList = computed(() => sessions.value.map(({ id, title, updatedAt }) => ({ id, title, updatedAt }))
+
+  // Actions 操作方法
+  function createSession() { ... }
+  function sendMessage(content: string) { ... }
+  // ...其他方法
+})
+```
+
+## 核心数据结构
+
+### Message（消息）
 ```typescript
 interface Message {
-  id: string              // 消息唯一标识
-  role: 'user' | 'assistant'  // 消息角色
-  content: string         // 消息内容
-  timestamp: number       // 时间戳
-  status: 'sending' | 'success' | 'error'  // 消息状态
+  id: string                // 消息唯一标识
+  role: 'user' | 'assistant' // 消息角色：用户/AI助手
+  content: string           // 消息内容
+  timestamp: number         // 时间戳
+  status: 'sending' | 'success' | 'error' // 消息状态
 }
 ```
 
-### 会话类型
+### ChatSession（会话）
 ```typescript
 interface ChatSession {
   id: string           // 会话唯一标识
@@ -27,168 +57,169 @@ interface ChatSession {
 ## 状态管理
 
 ### 核心状态
-```typescript
-const currentSessionId = ref('')  // 当前会话ID
-const sessions = ref<ChatSession[]>([])  // 会话列表
-const loading = ref(false)  // 加载状态
-const error = ref<string | null>(null)  // 错误信息
-```
+- `currentSessionId`：当前选中的会话 ID
+- `sessions`：所有会话列表
+- `loading`：加载状态标识
+- `error`：错误信息
 
 ### 计算属性
-```typescript
-const currentSession = computed(() =>
-  sessions.value.find(session => session.id === currentSessionId.value)
-)
-
-const currentMessages = computed(() =>
-  currentSession.value?.messages || []
-)
-
-const sessionList = computed(() =>
-  sessions.value.map(({ id, title, updatedAt }) => ({ id, title, updatedAt }))
-)
-```
+- `currentSession`：当前选中的会话对象
+- `currentMessages`：当前会话的消息列表
+- `sessionList`：简化的会话列表（用于侧边栏显示）
 
 ## 功能实现
 
 ### 1. 会话管理
+
+#### 创建会话
 ```typescript
-// 创建新会话
 function createSession() {
-  const newSession: ChatSession = {
-    id: Date.now().toString(),
-    title: '新对话',
-    messages: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }
-  sessions.value.push(newSession)
-  currentSessionId.value = newSession.id
-  saveSessions()
+  // 创建新会话对象
+  // 更新会话列表
+  // 切换到新会话
+  // 保存到本地存储
 }
+```
 
-// 切换会话
+#### 切换会话
+```typescript
 function switchSession(sessionId: string) {
-  currentSessionId.value = sessionId
+  // 更新当前会话 ID
 }
+```
 
-// 清空当前会话
-function clearCurrentSession() {
-  const session = sessions.value.find(s => s.id === currentSessionId.value)
-  if (session) {
-    session.messages = []
-    session.updatedAt = Date.now()
-    saveSessions()
-  }
-}
-
-// 删除会话
+#### 删除会话
+```typescript
 function deleteSession(sessionId: string) {
-  const index = sessions.value.findIndex(s => s.id === sessionId)
-  if (index > -1) {
-    sessions.value.splice(index, 1)
-    if (sessionId === currentSessionId.value)
-      currentSessionId.value = sessions.value[0]?.id || ''
-    saveSessions()
-  }
+  // 从列表中移除会话
+  // 如果是当前会话，切换到其他会话
+  // 保存更改
 }
 ```
 
 ### 2. 消息处理
+
+#### 发送消息流程
+1. 输入验证
+2. 会话准备
+3. 创建用户消息
+4. 更新状态
+5. 创建 AI 消息占位
+6. 发送请求
+7. 处理流式响应
+8. 更新最终状态
+9. 错误处理
+
 ```typescript
 async function sendMessage(content: string) {
-  // 创建用户消息
-  const userMessage: Message = {
-    id: Date.now().toString(),
-    role: 'user',
-    content,
-    timestamp: Date.now(),
-    status: 'sending',
+  // 1. 验证输入
+  if (!content.trim()) return
+
+  try {
+    // 2-6. 消息处理流程
+    // 7. 处理流式响应
+    // 8. 更新状态
+  } catch (err) {
+    // 9. 错误处理
   }
-
-  // 使用数组方法触发响应式更新
-  session.messages = [...session.messages, userMessage]
-
-  // 创建 AI 消息占位
-  const aiMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    role: 'assistant',
-    content: '',
-    timestamp: Date.now(),
-    status: 'sending',
-  }
-  session.messages = [...session.messages, aiMessage]
-
-  // 处理流式响应
-  const response = await chatService.sendStreamMessage(
-    session.messages.slice(0, -1),
-    {},
-    (text) => {
-      // 创建新的消息数组来触发响应式更新
-      const messageIndex = session.messages.findIndex(msg => msg.id === aiMessage.id)
-      if (messageIndex !== -1) {
-        const updatedMessages = [...session.messages]
-        updatedMessages[messageIndex] = {
-          ...aiMessage,
-          content: text,
-        }
-        session.messages = updatedMessages
-      }
-    }
-  )
 }
 ```
 
-## 本地存储
+### 3. 本地存储
 
-### 1. 存储实现
+#### 数据持久化
 ```typescript
-// 初始化时从本地存储加载会话
-const initSessions = () => {
+// 保存数据
+function saveSessions() {
+  localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(sessions.value))
+}
+
+// 加载数据
+function initSessions() {
   const savedSessions = localStorage.getItem(STORAGE_KEYS.sessions)
   if (savedSessions) {
     sessions.value = JSON.parse(savedSessions)
-    if (sessions.value.length > 0)
-      currentSessionId.value = sessions.value[0].id
+    // ...初始化逻辑
   }
-}
-
-// 保存会话到本地存储
-const saveSessions = () => {
-  localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(sessions.value))
 }
 ```
 
-## 响应式更新
-
-### 1. 数组更新
-- 使用展开运算符创建新数组
-- 避免直接修改数组元素
-- 触发深层响应式更新
-
-### 2. 对象更新
-- 使用解构赋值创建新对象
-- 保持对象引用的一致性
-- 确保响应式追踪
-
 ## 最佳实践
 
-### 1. 状态管理
-- 集中管理应用状态
-- 保持状态的响应式
-- 及时持久化数据
+### 1. 状态更新原则
+- 使用不可变更新方式
+- 保持状态同步
+- 及时持久化
 
 ### 2. 性能优化
-- 避免不必要的更新
-- 优化大量数据的处理
-- 合理使用计算属性
+- 使用计算属性缓存
+- 批量更新状态
+- 避免不必要的存储操作
 
 ### 3. 错误处理
-- 完善的错误状态
-- 用户友好的提示
-- 异常状态的恢复
+- 完善的错误状态管理
+- 用户友好的错误提示
+- 错误状态的及时清理
 
-### 4. 数据持久化
-- 定期保存状态
-- 防止数据丢失
-- 优化存储结构 
+### 4. 代码组织
+- 清晰的模块划分
+- 统一的命名规范
+- 完整的类型定义
+- 详细的注释说明
+
+## 使用示例
+
+### 基础用法
+```typescript
+const chatStore = useChatStore()
+
+// 创建新会话
+chatStore.createSession()
+
+// 发送消息
+await chatStore.sendMessage('Hello, AI!')
+
+// 切换会话
+chatStore.switchSession(sessionId)
+
+// 清空当前会话
+chatStore.clearCurrentSession()
+
+// 删除会话
+chatStore.deleteSession(sessionId)
+```
+
+### 状态订阅
+```typescript
+// 监听当前会话变化
+watch(() => chatStore.currentSession, (newSession) => {
+  // 处理会话变化
+})
+
+// 监听消息列表变化
+watch(() => chatStore.currentMessages, (messages) => {
+  // 处理消息变化
+})
+```
+
+## 注意事项
+
+1. **状态更新**
+   - 使用响应式方法更新状态
+   - 保持状态的一致性
+   - 及时同步到本地存储
+
+2. **消息处理**
+   - 处理好异步操作
+   - 合理展示加载状态
+   - 优雅处理错误情况
+
+3. **性能考虑**
+   - 避免频繁的存储操作
+   - 合理使用计算属性
+   - 及时清理无用数据
+
+4. **安全性**
+   - 验证输入数据
+   - 处理异常情况
+   - 保护敏感信息 
