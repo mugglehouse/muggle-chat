@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { message } from 'ant-design-vue'
+import { Button, Input, message } from 'ant-design-vue'
 import { chatService } from '../../api/chat'
 
 const apiKey = ref('')
@@ -58,15 +58,14 @@ onMounted(() => {
     <h3>API 设置</h3>
     <!-- 输入框 -->
     <div class="input-group">
-      <input
-        v-model="apiKey"
-        type="password"
+      <Input.Password
+        v-model:value="apiKey"
         placeholder="请输入以 sk- 开头的 API Key"
-        @keyup.enter="saveApiKey"
-      >
-      <button :disabled="!apiKey" @click="saveApiKey">
+        @press-enter="saveApiKey"
+      />
+      <Button type="primary" :disabled="!apiKey" @click="saveApiKey">
         保存
-      </button>
+      </Button>
     </div>
     <!-- 错误提示 -->
     <p v-if="error" class="error-message">
@@ -100,28 +99,10 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   margin: 1rem 0;
-}
 
-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-button {
-  padding: 8px 16px;
-  background: #1a73e8;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
+  :deep(.ant-input-affix-wrapper) {
+    flex: 1;
+  }
 }
 
 .error-message {

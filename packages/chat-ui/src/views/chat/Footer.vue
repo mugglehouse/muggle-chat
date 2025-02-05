@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 import { PaperClipOutlined, SendOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { Button, Input, message } from 'ant-design-vue'
 import { useChatStore } from '../../store/chat'
 import { chatService } from '../../api/chat'
 
+const { TextArea } = Input
 const messageInput = ref('')
 const chatStore = useChatStore()
 
@@ -44,7 +45,7 @@ function handleUpload() {
       <!-- 输入框 -->
       <div class="input-wrapper">
         <!-- 输入框 -->
-        <a-textarea
+        <TextArea
           v-model:value="messageInput"
           placeholder="输入消息..."
           :auto-size="{ minRows: 1, maxRows: 4 }"
@@ -54,11 +55,11 @@ function handleUpload() {
         <!-- 按钮 -->
         <div class="action-buttons">
           <!-- 上传按钮 -->
-          <a-button type="text" class="action-btn upload-button" @click="handleUpload">
+          <Button type="text" class="action-btn upload-button" @click="handleUpload">
             <PaperClipOutlined />
-          </a-button>
+          </Button>
           <!-- 发送按钮 -->
-          <a-button
+          <Button
             type="primary"
             class="action-btn send-button"
             :disabled="!messageInput.trim()"
@@ -67,7 +68,7 @@ function handleUpload() {
             <template #icon>
               <SendOutlined />
             </template>
-          </a-button>
+          </Button>
         </div>
       </div>
       <!-- 免责声明 -->
