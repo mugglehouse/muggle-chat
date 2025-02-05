@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
-import { DeleteOutlined, EditOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { computed, nextTick, ref } from 'vue'
+import { DeleteOutlined, EditOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { useChatStore } from '../../store/chat'
 
@@ -15,6 +15,19 @@ const selectedKeys = computed(() => [chatStore.currentSessionId])
 
 // 会话列表数据，按最新更新时间排序
 const sessionList = computed(() => chatStore.sessionList)
+
+// 搜索相关状态
+const searchKeyword = ref('')
+const isSearching = ref(false)
+
+// 过滤后的会话列表
+const filteredSessionList = computed(() => {
+  if (!searchKeyword.value)
+    return sessionList.value
+  return sessionList.value.filter(session =>
+    session.title.toLowerCase().includes(searchKeyword.value.toLowerCase()),
+  )
+})
 
 /**
  * 新建会话
@@ -91,25 +104,76 @@ function handleEditTitle(sessionId: string, isEnterKey = false) {
 function toggleCollapse() {
   collapsed.value = !collapsed.value
 }
+
+/**
+ * 开始搜索
+ */
+function startSearch() {
+  isSearching.value = true
+  // 使用 nextTick 确保输入框渲染后再聚焦
+  nextTick(() => {
+    const input = document.querySelector('.search-input input') as HTMLInputElement
+    if (input)
+      input.focus()
+  })
+}
+
+/**
+ * 结束搜索
+ */
+function endSearch() {
+  isSearching.value = false
+  searchKeyword.value = ''
+}
 </script>
 
 <template>
   <div class="chat-sider">
-    <!-- 新建对话按钮 -->
+    <!-- 顶部按钮组 -->
     <div class="sider-header">
-      <AButton
-        type="primary"
-        class="new-chat-btn"
-        @click="handleNewChat"
-      >
-        <template #icon>
-          <PlusOutlined />
+      <div class="button-group">
+        <AButton
+          type="primary"
+          class="action-btn new-chat-btn"
+          @click="handleNewChat"
+        >
+          <template #icon>
+            <PlusOutlined />
+          </template>
+          <span v-if="!collapsed">新建对话</span>
+        </AButton>
+
+        <!-- 搜索按钮/输入框 -->
+        <template v-if="!collapsed">
+          <a-input
+            v-if="isSearching"
+            v-model:value="searchKeyword"
+            placeholder="搜索对话"
+            class="action-btn search-input"
+            :allow-clear="true"
+            @blur="endSearch"
+            @press-esc="endSearch"
+          >
+            <template #prefix>
+              <SearchOutlined />
+            </template>
+          </a-input>
+          <AButton
+            v-else
+            type="primary"
+            class="action-btn search-btn"
+            @click="startSearch"
+          >
+            <template #icon>
+              <SearchOutlined />
+            </template>
+            <span>搜索对话</span>
+          </AButton>
         </template>
-        <span v-if="!collapsed">新建对话</span>
-      </AButton>
+      </div>
     </div>
 
-    <!-- 会话列表 -->
+    <!-- 会话列表 - 使用 filteredSessionList 替代 sessionList -->
     <div class="chat-list">
       <a-menu
         v-model:selected-keys="selectedKeys"
@@ -119,7 +183,7 @@ function toggleCollapse() {
       >
         <!-- 会话项 -->
         <a-menu-item
-          v-for="session in sessionList"
+          v-for="session in filteredSessionList"
           :key="session.id"
           class="chat-menu-item"
         >
@@ -175,9 +239,15 @@ function toggleCollapse() {
   .sider-header {
     padding: 1rem;
     border-bottom: 1px solid #eaeaea;
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+      flex-direction: column;
+    }
   }
 
-  .new-chat-btn {
+  .action-btn {
     width: 100%;
     background-color: #000;
     border-color: #000;
@@ -185,6 +255,26 @@ function toggleCollapse() {
     &:hover {
       background-color: #333;
       border-color: #333;
+    }
+
+    &.search-input {
+      background-color: #fff;
+      transition: all 0.2s;
+
+      :deep(.ant-input) {
+        color: #000;
+        &::placeholder {
+          color: #666;
+        }
+      }
+
+      :deep(.ant-input-prefix) {
+        color: #666;
+      }
+
+      &:hover, &:focus-within {
+        border-color: #333;
+      }
     }
   }
 
