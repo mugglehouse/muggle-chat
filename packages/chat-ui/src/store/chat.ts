@@ -56,6 +56,9 @@ export const useChatStore = defineStore('chat', () => {
     const savedSessions = localStorage.getItem(STORAGE_KEYS.sessions)
     if (savedSessions) {
       sessions.value = JSON.parse(savedSessions)
+      // 按更新时间排序
+      sessions.value.sort((a, b) => b.updatedAt - a.updatedAt)
+      // 如果有会话，选中第一条（最新的会话）
       if (sessions.value.length > 0)
         currentSessionId.value = sessions.value[0].id
     }
@@ -88,7 +91,9 @@ export const useChatStore = defineStore('chat', () => {
    * 获取会话列表的简化信息（用于侧边栏显示）
    */
   const sessionList = computed(() =>
-    sessions.value.map(({ id, title, updatedAt }) => ({ id, title, updatedAt })),
+    sessions.value
+      .map(({ id, title, updatedAt }) => ({ id, title, updatedAt }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
   )
 
   // === Actions ===
@@ -267,6 +272,20 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /**
+   * 更新会话标题
+   * @param sessionId 会话ID
+   * @param title 新标题
+   */
+  function updateSessionTitle(sessionId: string, title: string) {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      session.title = title
+      session.updatedAt = Date.now()
+      saveSessions()
+    }
+  }
+
   // 初始化 Store
   initSessions()
 
@@ -287,5 +306,6 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     clearCurrentSession,
     deleteSession,
+    updateSessionTitle,
   }
 })

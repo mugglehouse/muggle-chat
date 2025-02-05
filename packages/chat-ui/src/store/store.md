@@ -223,3 +223,147 @@ watch(() => chatStore.currentMessages, (messages) => {
    - 验证输入数据
    - 处理异常情况
    - 保护敏感信息 
+
+# 状态管理文档
+
+## 聊天状态管理 (useChatStore)
+
+### 状态定义
+
+```typescript
+interface State {
+  currentSessionId: string       // 当前选中的会话 ID
+  sessions: ChatSession[]       // 所有会话列表
+  loading: boolean             // 加载状态标识
+  error: string | null        // 错误信息
+}
+
+interface ChatSession {
+  id: string                  // 会话唯一标识
+  title: string              // 会话标题
+  messages: Message[]        // 消息列表
+  createdAt: number         // 创建时间
+  updatedAt: number        // 更新时间
+}
+
+interface Message {
+  id: string                // 消息唯一标识
+  role: 'user' | 'assistant' // 消息角色：用户/AI助手
+  content: string           // 消息内容
+  timestamp: number        // 时间戳
+  status: 'sending' | 'success' | 'error' // 消息状态
+}
+```
+
+### Getters
+
+| 名称 | 返回类型 | 说明 |
+|------|----------|------|
+| currentSession | ChatSession \| undefined | 获取当前选中的会话对象 |
+| currentMessages | Message[] | 获取当前会话的消息列表 |
+| sessionList | { id: string; title: string; updatedAt: number }[] | 获取会话列表（按更新时间排序） |
+
+### Actions
+
+#### 会话管理
+
+##### createSession
+创建新的会话。
+```typescript
+function createSession(): void
+```
+- 创建一个新的空会话
+- 自动切换到新创建的会话
+- 保存到本地存储
+
+##### switchSession
+切换当前选中的会话。
+```typescript
+function switchSession(sessionId: string): void
+```
+- 更新当前会话 ID
+
+##### deleteSession
+删除指定的会话。
+```typescript
+function deleteSession(sessionId: string): void
+```
+- 从会话列表中删除指定会话
+- 如果删除的是当前会话，自动切换到其他会话
+- 更新本地存储
+
+##### updateSessionTitle
+更新会话标题。
+```typescript
+function updateSessionTitle(sessionId: string, title: string): void
+```
+- 更新指定会话的标题
+- 更新会话的 updatedAt 时间戳
+- 保存到本地存储
+
+#### 消息管理
+
+##### sendMessage
+发送消息并处理响应。
+```typescript
+async function sendMessage(content: string): Promise<void>
+```
+- 验证输入内容
+- 创建用户消息
+- 发送到 AI 服务
+- 处理流式响应
+- 更新消息状态
+- 自动更新会话标题（首次发送消息时）
+
+##### clearCurrentSession
+清空当前会话的所有消息。
+```typescript
+function clearCurrentSession(): void
+```
+- 清空当前会话的消息列表
+- 更新会话的 updatedAt 时间戳
+- 保存到本地存储
+
+### 数据持久化
+
+- 使用 localStorage 存储会话数据
+- 在以下情况下自动保存：
+  - 创建新会话
+  - 删除会话
+  - 更新会话标题
+  - 发送/接收消息
+  - 清空会话
+
+### 使用示例
+
+```typescript
+import { useChatStore } from '@/store/chat'
+
+const chatStore = useChatStore()
+
+// 创建新会话
+chatStore.createSession()
+
+// 发送消息
+await chatStore.sendMessage('Hello, AI!')
+
+// 切换会话
+chatStore.switchSession(sessionId)
+
+// 更新会话标题
+chatStore.updateSessionTitle(sessionId, '新标题')
+
+// 删除会话
+chatStore.deleteSession(sessionId)
+
+// 清空当前会话
+chatStore.clearCurrentSession()
+```
+
+### 注意事项
+
+1. 会话列表按最新更新时间排序
+2. 消息发送失败时会自动更新状态
+3. 首次发送消息时会自动设置会话标题
+4. 删除会话时会自动切换到其他会话
+5. 所有会话数据都会持久化到本地存储 
