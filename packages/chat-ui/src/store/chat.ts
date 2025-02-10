@@ -185,6 +185,7 @@ export const useChatStore = defineStore('chat', () => {
               ...aiMessage,
               content: text,
             }
+            console.log('updatedMessages', updatedMessages[messageIndex])
             session.messages = updatedMessages
             session.updatedAt = Date.now()
             saveSessions()

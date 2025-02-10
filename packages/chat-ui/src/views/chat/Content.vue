@@ -17,6 +17,7 @@ async function scrollToBottom() {
   // 当scrollTop + clientHeight = scrollHeight时，说明滚动到底部
   await nextTick()
   if (messageListRef.value) {
+    console.log('messageListRef.value', messageListRef.value)
     const { scrollHeight, clientHeight } = messageListRef.value
     messageListRef.value.scrollTop = scrollHeight - clientHeight
   }
