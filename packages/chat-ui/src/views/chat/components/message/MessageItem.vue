@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import MarkdownRenderer from '@muggle-chat/chat-ui/src/components/markdown/MarkdownRenderer.vue'
 import type { Message } from '@muggle-chat/chat-ui/src/store/chat.ts'
 import MessageStatus from './MessageStatus.vue'

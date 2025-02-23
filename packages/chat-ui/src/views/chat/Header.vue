@@ -2,8 +2,10 @@
 import { ref } from 'vue'
 import { UserOutlined } from '@ant-design/icons-vue'
 import ApiKeySettings from '../../components/settings/ApiKeySettings.vue'
+import { InlineChatDialog } from '../../components/inline-chat'
 
 const showSettings = ref(false)
+const showInlineChat = ref(false)
 
 function openSettings() {
   showSettings.value = true
@@ -21,8 +23,30 @@ function closeSettings() {
       Muggle Chat
     </h1>
 
-    <!-- 个人中心 -->
-    <div class="actions">
+    <!-- 右侧操作区 -->
+    <div class="right-actions">
+      <!-- 内联对话框 -->
+      <div class="inline-chat">
+        <Button
+          class="inline-chat-btn"
+          @click="() => showInlineChat = true"
+        >
+          <!-- <MessageOutlined /> -->
+          <span>切换内联模式</span>
+        </Button>
+
+        <!-- 内联模式背景板 -->
+        <div v-if="showInlineChat" class="inline-chat-wrapper">
+          <div class="inline-chat-background">
+            <InlineChatDialog
+              inline
+              @close="showInlineChat = false"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 个人中心 -->
       <a-dropdown placement="bottomRight">
         <!-- 头像 -->
         <div class="avatar-wrapper">
@@ -74,7 +98,14 @@ function closeSettings() {
     letter-spacing: -0.025em;
   }
 
-  .actions {
+  .right-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .inline-chat {
+    position: relative;
     display: flex;
     align-items: center;
   }
@@ -113,6 +144,51 @@ function closeSettings() {
       background-color: #fafafa;
       color: #000;
     }
+  }
+}
+
+.inline-chat-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(4px);
+}
+
+.inline-chat-background {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.95));
+}
+
+.inline-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  background: #000;
+  transition: all 0.2s;
+
+  &:hover {
+    color: #fff;
+    background-color: #333;
+  }
+
+  .anticon {
+    font-size: 16px;
   }
 }
 </style>
