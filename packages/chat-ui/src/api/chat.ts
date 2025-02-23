@@ -107,8 +107,8 @@ const chatAPI = axios.create({
 chatAPI.interceptors.request.use((config) => {
   const apiKey = localStorage.getItem(STORAGE_KEYS.apiKey)
   if (apiKey) {
-    // Authorization: Bearer $OPENAI_API_KEY"
-    // apiKey为token,适用JWT认证
+    // OpenAI要求使用 Bearer 认证方案
+    // 格式：Authorization: Bearer sk-xxx
     config.headers.Authorization = `Bearer ${apiKey}`
     config.headers['x-requested-with'] = 'XMLHttpRequest'
   }
