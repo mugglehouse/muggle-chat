@@ -58,6 +58,7 @@ function handleDeleteSession(e: Event, sessionId: string) {
     content: '确定要删除这个会话吗？此操作不可恢复。',
     okText: '确认',
     cancelText: '取消',
+    class: 'custom-modal',
     async onOk() {
       chatStore.deleteSession(sessionId)
       message.success('删除成功')
@@ -79,6 +80,12 @@ function startEdit(e: Event, sessionId: string, currentTitle: string) {
   e.stopPropagation() // 阻止事件冒泡，防止触发会话选中
   editingSessionId.value = sessionId
   editingTitle.value = currentTitle
+  // 使用 nextTick 确保在 DOM 更新后聚焦输入框
+  nextTick(() => {
+    const input = document.querySelector(`input[data-session-id="${sessionId}"]`) as HTMLInputElement
+    if (input)
+      input.focus()
+  })
 }
 
 /**
@@ -91,10 +98,16 @@ function handleEditTitle(sessionId: string, isEnterKey = false) {
   if (!editingSessionId.value || (isEnterKey && sessionId !== editingSessionId.value))
     return
 
-  if (editingTitle.value.trim()) {
-    chatStore.updateSessionTitle(sessionId, editingTitle.value)
+  const trimmedTitle = editingTitle.value.trim()
+  if (trimmedTitle) {
+    // 获取当前会话
+    const session = sessionList.value.find(s => s.id === sessionId)
+    // 只有当标题真正改变时才更新并显示提示
+    if (session && session.title !== trimmedTitle) {
+      chatStore.updateSessionTitle(sessionId, trimmedTitle)
+      message.success('修改成功')
+    }
     editingSessionId.value = null
-    message.success('修改成功')
   }
 }
 
@@ -190,15 +203,16 @@ function endSearch() {
           <div class="chat-item-content">
             <!-- 编辑状态 -->
             <template v-if="editingSessionId === session.id">
-              <a-input
-                v-model:value="editingTitle"
-                size="small"
+              <input
+                :key="session.id"
+                v-model="editingTitle"
+                :data-session-id="session.id"
                 class="edit-title"
-                autofocus
-                @press-enter="handleEditTitle(session.id, true)"
+                type="text"
+                @keyup.enter="handleEditTitle(session.id, true)"
                 @blur="handleEditTitle(session.id)"
                 @click.stop
-              />
+              >
             </template>
             <!-- 显示状态 -->
             <template v-else>
@@ -228,12 +242,38 @@ function endSearch() {
   </div>
 </template>
 
+<style lang="less">
+.custom-modal, .ant-modal-confirm, .ant-modal {
+  .ant-btn-primary {
+    background-color: #000 !important;
+    border-color: #000 !important;
+
+    &:hover {
+      background-color: #333 !important;
+      border-color: #333 !important;
+    }
+  }
+
+  .ant-modal-confirm-btns {
+    .ant-btn-primary {
+      background-color: #000 !important;
+      border-color: #000 !important;
+
+      &:hover {
+        background-color: #333 !important;
+        border-color: #333 !important;
+      }
+    }
+  }
+}
+</style>
+
 <style scoped lang="less">
 .chat-sider {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #fff;
+  background-color: #f7f7f8;
   position: relative;
 
   .sider-header {
@@ -286,6 +326,7 @@ function endSearch() {
 
   :deep(.chat-menu) {
     border-inline-end: none !important;
+    background-color: #f7f7f8;
 
     .chat-menu-item {
       border-radius: 0.375rem;
@@ -293,6 +334,7 @@ function endSearch() {
       padding: 8px 12px !important;
       height: auto !important;
       line-height: 1.5;
+      background-color: #f7f7f8;
 
       .chat-actions {
         opacity: 0;
@@ -301,7 +343,7 @@ function endSearch() {
       }
 
       &:hover {
-        background-color: #f5f5f5;
+        background-color: #ececf1;
 
         .chat-actions {
           opacity: 1;
@@ -311,7 +353,7 @@ function endSearch() {
       }
 
       &.ant-menu-item-selected {
-        background-color: #f0f0f0;
+        background-color: #ececf1;
         color: #000;
 
         &:hover .chat-actions {
@@ -369,9 +411,17 @@ function endSearch() {
     .edit-title {
       flex: 1;
       font-size: 14px;
+      padding: 4px 8px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+      outline: none;
+      background: #fff;
+      width: calc(100% - 16px); // 减去padding的宽度
+      margin: 0;
 
-      :deep(.ant-input) {
-        padding: 4px 8px;
+      &:hover, &:focus {
+        border-color: rgba(0, 0, 0, 0.2);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
       }
     }
   }

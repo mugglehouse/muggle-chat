@@ -36,8 +36,7 @@ const siderCollapsed = ref(false)
 .app-container {
   height: 100vh;
   display: flex;
-  background-color: #fff;
-  overflow: hidden; // 防止出现双滚动条
+  overflow: hidden;
 }
 
 .app-sider {
@@ -45,8 +44,8 @@ const siderCollapsed = ref(false)
   width: 256px;
   border-right: 1px solid #eaeaea;
   transition: all 0.3s;
+  background-color: #f7f7f8;
   overflow: hidden;
-  position: relative;
 
   &.collapsed {
     width: 0;
@@ -59,37 +58,52 @@ const siderCollapsed = ref(false)
   display: flex;
   flex-direction: column;
   background-color: #fff;
-  min-width: 0; // 防止flex子项溢出
-  position: relative; // 为sticky定位提供参考
+  min-width: 0;
+  position: relative;
 }
 
 .app-header {
   height: 3.5rem;
   border-bottom: 1px solid #eaeaea;
   background-color: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  flex-shrink: 0;
 }
 
 .app-content {
   flex: 1;
+  background-color: #fff;
   overflow-y: auto;
-  background-color: #fafafa;
-  -ms-overflow-style: none; // IE和Edge
-  scrollbar-width: none; // Firefox
+  position: relative;
+
+  /* 仅对当前容器的滚动条生效 */
+  scrollbar-width: thin; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent; /* Firefox */
 
   &::-webkit-scrollbar {
-    display: none; // Chrome和Safari
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.2);
+    }
   }
 }
 
 .app-footer {
   border-top: 1px solid #eaeaea;
   background-color: #fff;
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
+  flex-shrink: 0;
 }
 
 :deep(.ant-layout) {

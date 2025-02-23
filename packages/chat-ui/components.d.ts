@@ -15,7 +15,6 @@ declare module 'vue' {
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
     AModal: typeof import('ant-design-vue/es')['Modal']
     ApiKeySettings: typeof import('./src/components/settings/ApiKeySettings.vue')['default']
-    ATextarea: typeof import('ant-design-vue/es')['Textarea']
     MarkdownRenderer: typeof import('./src/components/markdown/MarkdownRenderer.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
