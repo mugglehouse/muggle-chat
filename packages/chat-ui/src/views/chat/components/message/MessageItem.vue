@@ -58,26 +58,27 @@ function handleCopy() {
 
     <div class="content">
       <!-- 消息内容 -->
-      <div class="message-content">
-        <template v-if="message.type === 'image'">
-          <ImageMessage :message="message" :show-metadata="message.role === 'assistant'" />
-        </template>
-        <template v-else>
-        <template v-if="message.status === 'sending' && message.role === 'assistant'">
-          <template v-if="!message.content">
+      <div class="message-wrapper">
+        <!-- 加载状态 -->
+        <template v-if="message.status === 'sending' && message.role === 'assistant' && !message.content">
+          <div class="message-bubble loading">
             <div class="loading-dots">
               <span />
               <span />
               <span />
             </div>
-          </template>
-          <template v-else>
-            <MarkdownRenderer :content="message.content" />
-          </template>
+          </div>
         </template>
+        <!-- 正常内容 -->
         <template v-else>
-          <MarkdownRenderer :content="message.content" />
-          </template>
+          <!-- 文本内容 -->
+          <div v-if="message.content" class="message-bubble">
+            <MarkdownRenderer :content="message.content" />
+          </div>
+          <!-- 图片内容 -->
+          <div v-if="message.type === 'image'" class="message-image">
+            <ImageMessage :message="message" :show-metadata="message.role === 'assistant'" />
+          </div>
         </template>
       </div>
 
@@ -101,7 +102,6 @@ function handleCopy() {
   gap: 16px;
   padding: 20px;
   position: relative;
-  margin-bottom: 40px;
 
   &.user {
     flex-direction: row-reverse;
@@ -110,13 +110,10 @@ function handleCopy() {
       align-items: flex-end;
     }
 
-    .message-content {
+    .message-bubble {
       background-color: #1a1a1a;
       color: white;
-
-      :deep(.image-message) {
-        background: transparent;
-      }
+      border: none;
     }
 
     .message-footer {
@@ -125,20 +122,9 @@ function handleCopy() {
   }
 
   &.assistant {
-    .message-content {
-      background: none;
-    }
-  }
-
-  // 非最后一条消息的状态默认隐藏
-  &:not(:last-child) {
-    .message-footer {
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-
-    &:hover .message-footer {
-      opacity: 1;
+    .message-bubble {
+      background: transparent;
+      border: none;
     }
   }
 }
@@ -164,14 +150,28 @@ function handleCopy() {
   min-width: 0;
 }
 
-.message-content {
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 85%;
+}
+
+.message-bubble {
   font-size: 15px;
   line-height: 1.6;
   word-break: break-word;
   padding: 12px 16px;
   border-radius: 12px;
-  max-width: 85%;
   display: inline-block;
+
+  &.loading {
+    min-width: 60px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 
   :deep(p) {
     margin: 0 0 1em;
@@ -191,12 +191,26 @@ function handleCopy() {
   }
 }
 
+.message-image {
+  :deep(.image-message) {
+    background: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+    border-radius: 8px;
+  }
+}
+
 .loading-dots {
   display: flex;
   gap: 4px;
-  padding: 8px 0;
   align-items: center;
-  min-height: 24px;
 
   span {
     width: 4px;
@@ -223,22 +237,15 @@ function handleCopy() {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+
+  .message-item:hover & {
+    opacity: 1;
+  }
 
   .time {
     transition: opacity 0.2s ease;
-  }
-}
-
-:deep(.ant-input) {
-  border-radius: 6px;
-  border-color: rgba(0, 0, 0, 0.1);
-  font-size: 15px;
-  padding: 8px 12px;
-  resize: none;
-
-  &:hover, &:focus {
-    border-color: rgba(0, 0, 0, 0.2);
-    box-shadow: none;
   }
 }
 

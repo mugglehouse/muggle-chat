@@ -1,25 +1,42 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import type { ImageMessage } from '../../store/chat'
 
 // Props
-const props = defineProps<{
+defineProps<{
   message: ImageMessage
   showMetadata?: boolean
 }>()
-
-// 计算属性
-const isUser = computed(() => props.message.role === 'user')
 
 // 状态
 const showPreview = ref(false)
 const previewUrl = ref('')
 
-// 方法
-function formatTime(timestamp: number) {
-  return new Date(timestamp).toLocaleTimeString()
-}
+// 生成进度相关的文案
+const progressTexts = [
+  '正在构思图像...',
+  '绘制草图中...',
+  '添加细节...',
+  '最终润色...',
+]
+const currentProgressIndex = ref(0)
 
+// 每3秒更新一次进度文案
+let progressInterval: number | null = null
+
+// 启动进度更新
+progressInterval = setInterval(() => {
+  if (currentProgressIndex.value < progressTexts.length - 1)
+    currentProgressIndex.value++
+}, 3000)
+
+// 组件卸载时清除定时器
+onUnmounted(() => {
+  if (progressInterval)
+    clearInterval(progressInterval)
+})
+
+// 方法
 function handlePreview(url: string) {
   previewUrl.value = url
   showPreview.value = true
@@ -42,16 +59,17 @@ function handleImageError(e: Event) {
 </script>
 
 <template>
-  <div class="image-message" :class="{ 'is-user': isUser }">
-    <!-- 消息头部 -->
-    <div class="message-header">
-      <span class="role">{{ isUser ? '用户' : 'AI助手' }}</span>
-      <span class="time">{{ formatTime(message.timestamp) }}</span>
-    </div>
-
-    <!-- 提示词 -->
-    <div class="prompt">
-      {{ message.content }}
+  <div class="image-message">
+    <!-- 生成进度提示 -->
+    <div v-if="message.status === 'sending' && !message.imageUrls.length && message.role === 'assistant'" class="progress-indicator">
+      <div class="progress-spinner">
+        <svg class="spinner" viewBox="0 0 50 50">
+          <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5" />
+        </svg>
+      </div>
+      <div class="progress-text">
+        {{ progressTexts[currentProgressIndex] }}
+      </div>
     </div>
 
     <!-- 图片列表 -->
@@ -87,65 +105,26 @@ function handleImageError(e: Event) {
     <div v-if="message.status === 'error'" class="error">
       图片生成失败，请重试
     </div>
-
-    <!-- 元数据 -->
-    <div v-if="message.metadata && showMetadata" class="metadata">
-      <div class="metadata-item">
-        <span class="label">尺寸：</span>
-        <span class="value">{{ message.metadata.size }}</span>
-      </div>
-      <div class="metadata-item">
-        <span class="label">数量：</span>
-        <span class="value">{{ message.metadata.n }}张</span>
-      </div>
-      <div class="metadata-item">
-        <span class="label">模型：</span>
-        <span class="value">{{ message.metadata.model }}</span>
-      </div>
-    </div>
   </div>
 </template>
 
 <style scoped>
 .image-message {
-  padding: 16px;
   margin: 8px 0;
-  border-radius: 8px;
-  background: var(--bg-color);
-}
-
-.image-message.is-user {
-  background: var(--bg-secondary);
-}
-
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.prompt {
-  margin-bottom: 12px;
-  font-size: 14px;
-  color: var(--text-color);
-  line-height: 1.5;
 }
 
 .image-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
-  margin-bottom: 12px;
 }
 
 .image-item {
   position: relative;
   aspect-ratio: 1;
-  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
+  border-radius: 8px;
 }
 
 .image {
@@ -153,6 +132,7 @@ function handleImageError(e: Event) {
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s ease;
+  border-radius: 8px;
 }
 
 .image:hover {
@@ -214,21 +194,55 @@ function handleImageError(e: Event) {
   font-size: 14px;
 }
 
-.metadata {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.metadata-item {
-  display: inline-flex;
+.progress-indicator {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  margin-right: 16px;
+  gap: 12px;
+  padding: 20px;
 }
 
-.metadata-item .label {
-  margin-right: 4px;
+.progress-spinner {
+  width: 28px;
+  height: 28px;
+}
+
+.spinner {
+  animation: rotate 2s linear infinite;
+  width: 100%;
+  height: 100%;
+}
+
+.path {
+  stroke: var(--primary-color, #3b82f6);
+  stroke-linecap: round;
+  animation: dash 1.5s ease-in-out infinite;
+}
+
+.progress-text {
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+  text-align: center;
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dash {
+  0% {
+    stroke-dasharray: 1, 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -35;
+  }
+  100% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -124;
+  }
 }
 </style>

@@ -1,32 +1,65 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
-import { PaperClipOutlined, PictureOutlined, SendOutlined } from '@ant-design/icons-vue'
-import { Button, Input, Modal, message } from 'ant-design-vue'
+import { computed, ref } from 'vue'
+import { PaperClipOutlined, SendOutlined } from '@ant-design/icons-vue'
+import { Button, Input, message } from 'ant-design-vue'
 import { useChatStore } from '../../store/chat'
 import { chatService } from '../../api/chat'
-import ImageGeneration from '../../components/image-generation/index.vue'
 
 const { TextArea } = Input
 const messageInput = ref('')
 const chatStore = useChatStore()
-const showImageModal = ref(false)
+
+// 计算当前输入是否是图片生成命令
+const isImageGeneration = computed(() => {
+  const input = messageInput.value.trim()
+  return input.startsWith('/image ') || input.startsWith('/img ')
+})
+
+// 从输入中提取图片生成参数
+function parseImageCommand(input: string): { prompt: string; size?: string; n?: number } {
+  // 移除命令前缀
+  const content = input.replace(/^\/(?:image|img)\s+/, '').trim()
+
+  // 解析参数
+  const params = content.split('--')
+  const prompt = params[0].trim()
+  const options: { size?: string; n?: number } = {}
+
+  // 解析其他参数
+  params.slice(1).forEach((param) => {
+    const [key, value] = param.trim().split(' ')
+    if (key === 'size' && ['256x256', '512x512', '1024x1024'].includes(value)) {
+      options.size = value
+    }
+    else if (key === 'n') {
+      const num = Number.parseInt(value)
+      if (num >= 1 && num <= 10)
+        options.n = num
+    }
+  })
+
+  return { prompt, ...options }
+}
 
 async function handleSend() {
-  // 如果输入框为空，则不发送消息
   if (!messageInput.value.trim())
     return
 
-  // 检查是否设置了 API Key
   if (!chatService.getApiKey()) {
     message.error('请先在设置中配置 OpenAI API Key')
     return
   }
 
-  // 发送消息
   try {
-    console.log('发送消息:', messageInput.value)
-    await chatStore.sendMessage(messageInput.value)
-    console.log('消息发送成功')
+    if (isImageGeneration.value) {
+      // 处理图片生成命令
+      const { prompt, size, n } = parseImageCommand(messageInput.value)
+      await chatStore.sendImagePrompt(prompt, { size: size as '256x256' | '512x512' | '1024x1024', n })
+    }
+    else {
+      // 处理普通文本消息
+      await chatStore.sendMessage(messageInput.value)
+    }
     messageInput.value = ''
   }
   catch (err) {
@@ -36,17 +69,16 @@ async function handleSend() {
 }
 
 function handleUpload() {
-  // TODO: 实现文件上传功能
   message.info('文件上传功能开发中')
 }
 
-function openImageGeneration() {
-  showImageModal.value = true
-}
+// 输入提示信息
+const inputPlaceholder = computed(() => {
+  if (isImageGeneration.value)
+    return '输入图片描述，可选参数：--size [256x256|512x512|1024x1024] --n [1-10]'
 
-function closeImageGeneration() {
-  showImageModal.value = false
-}
+  return '输入消息，使用 /image 或 /img 生成图片...'
+})
 </script>
 
 <template>
@@ -54,25 +86,18 @@ function closeImageGeneration() {
     <div class="input-container">
       <!-- 输入框 -->
       <div class="input-wrapper">
-        <!-- 输入框 -->
         <TextArea
           v-model:value="messageInput"
-          placeholder="输入消息..."
+          :placeholder="inputPlaceholder"
           :auto-size="{ minRows: 1, maxRows: 4 }"
           class="message-input"
+          :class="{ 'is-image-mode': isImageGeneration }"
           @keypress.enter.prevent="handleSend"
         />
-        <!-- 按钮 -->
         <div class="action-buttons">
-          <!-- 图片生成按钮 -->
-          <Button type="text" class="action-btn image-button" @click="openImageGeneration">
-            <PictureOutlined />
-          </Button>
-          <!-- 上传按钮 -->
           <Button type="text" class="action-btn upload-button" @click="handleUpload">
             <PaperClipOutlined />
           </Button>
-          <!-- 发送按钮 -->
           <Button
             type="primary"
             class="action-btn send-button"
@@ -85,22 +110,15 @@ function closeImageGeneration() {
           </Button>
         </div>
       </div>
+      <!-- 命令提示 -->
+      <div v-if="isImageGeneration" class="command-tips">
+        示例：/image 一只可爱的猫咪 --size 1024x1024 --n 1
+      </div>
       <!-- 免责声明 -->
       <div class="disclaimer">
         免责声明：AI可能会产生错误信息，请自行判断和验证重要信息
       </div>
     </div>
-
-    <!-- 图片生成弹窗 -->
-    <Modal
-      v-model:visible="showImageModal"
-      title="生成图片"
-      :footer="null"
-      width="600px"
-      @cancel="closeImageGeneration"
-    >
-      <ImageGeneration placeholder="描述你想要生成的图片..." />
-    </Modal>
   </div>
 </template>
 
@@ -124,21 +142,25 @@ function closeImageGeneration() {
       border-color: #000;
       box-shadow: 0 0 0 1px #000;
     }
+  }
 
-    .message-input {
-      border: none !important;
-      background: transparent !important;
-      padding: 0.875rem 9rem 0.875rem 1.25rem;
-      resize: none;
-      font-size: 0.9375rem;
+  .message-input {
+    border: none !important;
+    background: transparent !important;
+    padding: 0.875rem 9rem 0.875rem 1.25rem;
+    resize: none;
+    font-size: 0.9375rem;
 
-      &:focus {
-        box-shadow: none;
-      }
+    &.is-image-mode {
+      background: rgba(0, 0, 0, 0.02) !important;
+    }
 
-      &::placeholder {
-        color: #999;
-      }
+    &:focus {
+      box-shadow: none;
+    }
+
+    &::placeholder {
+      color: #999;
     }
   }
 
@@ -161,7 +183,6 @@ function closeImageGeneration() {
     border-radius: 0.5rem;
   }
 
-  .image-button,
   .upload-button {
     color: #666;
 
@@ -187,23 +208,18 @@ function closeImageGeneration() {
     }
   }
 
+  .command-tips {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: #666;
+    padding: 0 1rem;
+  }
+
   .disclaimer {
     margin-top: 0.75rem;
     font-size: 0.75rem;
     text-align: center;
     color: #666;
   }
-}
-
-:deep(.ant-modal-content) {
-  padding: 20px !important;
-}
-
-:deep(.ant-modal-header) {
-  margin-bottom: 16px;
-}
-
-:deep(.ant-modal-body) {
-  padding: 0;
 }
 </style>
