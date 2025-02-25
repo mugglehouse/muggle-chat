@@ -97,7 +97,7 @@ async function handleDownload(url: string) {
 .image-item {
   position: relative;
   width: fit-content;
-  max-width: 400px;
+  max-width: 300px;
 }
 
 .image-wrapper {
@@ -107,7 +107,7 @@ async function handleDownload(url: string) {
 
 .image-wrapper img {
   width: 100%;
-  max-width: 400px;
+  max-width: 300px;
   height: auto;
   border-radius: 8px;
   cursor: pointer;
