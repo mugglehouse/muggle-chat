@@ -31,10 +31,14 @@ export interface ImageGenerationResponse {
  * @interface ImageData
  * @property {string} url - 当responseFormat为'url'时的图片URL
  * @property {string} b64_json - 当responseFormat为'b64_json'时的Base64编码图片数据
+ * @property {string} revised_prompt - API 返回的修正后的提示词
+ * @property {string} prompt - 原始提示词
  */
 export interface ImageData {
   url?: string
   b64_json?: string
+  revised_prompt?: string
+  prompt?: string
 }
 
 /**

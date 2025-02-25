@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { chatService } from '../api/chat'
 import { imageService } from '../api/image'
 import { STORAGE_KEYS } from '../config'
-import type { ImageGenerationOptions } from '../types/image'
+
+// import type { ImageGenerationOptions } from '../types/image'
 
 /**
  * 基础消息接口定义
@@ -50,6 +51,7 @@ export interface ImageMessage extends BaseMessage {
     n: number
     model?: string
     created: number
+    description?: string
   }
 }
 
@@ -289,13 +291,9 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * 发送图片生成请求
    * @param prompt 图片生成提示词
-   * @param options 图片生成选项
-   * @param onProgress 进度回调函数
    */
   async function sendImagePrompt(
     prompt: string,
-    options?: Partial<ImageGenerationOptions>,
-    onProgress?: (progress: number) => void,
   ) {
     // 1. 输入验证
     if (!prompt.trim())
@@ -336,13 +334,13 @@ export const useChatStore = defineStore('chat', () => {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         type: 'image',
-        content: prompt,
+        content: '',
         imageUrls: [],
         timestamp: Date.now(),
         status: 'sending',
         metadata: {
-          size: options?.size || '1024x1024',
-          n: options?.n || 1,
+          size: '1024x1024',
+          n: 1,
           model: 'dall-e-3',
           created: Date.now(),
         },
@@ -356,9 +354,9 @@ export const useChatStore = defineStore('chat', () => {
       const response = await imageService.generateImage(
         {
           prompt,
-          ...options,
+          size: '1024x1024',
+          n: 1,
         },
-        onProgress,
       )
 
       // 更新消息最终状态
@@ -378,9 +376,12 @@ export const useChatStore = defineStore('chat', () => {
       if (aiIndex !== -1 && response.data && response.data.length > 0) {
         finalMessages[aiIndex] = {
           ...aiMessage,
-          content: prompt,
           imageUrls: response.data.map(item => item.url || ''),
           status: 'success',
+          metadata: {
+            ...aiMessage.metadata,
+            description: response.data[0].revised_prompt || response.data[0].prompt || prompt,
+          },
         }
       }
 

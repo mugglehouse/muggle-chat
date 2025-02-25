@@ -48,12 +48,14 @@ export interface ImageMessage extends BaseMessage {
  * @property {number} n - 生成的图片数量
  * @property {string} model - 使用的模型
  * @property {number} created - 创建时间戳
+ * @property {string} description - API返回的图片描述
  */
 export interface ImageMetadata {
   size: '256x256' | '512x512' | '1024x1024'
   n: number
   model?: string
   created: number
+  description?: string
 }
 
 /**

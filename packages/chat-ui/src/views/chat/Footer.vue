@@ -16,29 +16,11 @@ const isImageGeneration = computed(() => {
 })
 
 // 从输入中提取图片生成参数
-function parseImageCommand(input: string): { prompt: string; size?: string; n?: number } {
-  // 移除命令前缀
-  const content = input.replace(/^\/(?:image|img)\s+/, '').trim()
-
-  // 解析参数
-  const params = content.split('--')
-  const prompt = params[0].trim()
-  const options: { size?: string; n?: number } = {}
-
-  // 解析其他参数
-  params.slice(1).forEach((param) => {
-    const [key, value] = param.trim().split(' ')
-    if (key === 'size' && ['256x256', '512x512', '1024x1024'].includes(value)) {
-      options.size = value
-    }
-    else if (key === 'n') {
-      const num = Number.parseInt(value)
-      if (num >= 1 && num <= 10)
-        options.n = num
-    }
-  })
-
-  return { prompt, ...options }
+function parseImageCommand(input: string): { prompt: string } {
+  // 移除命令前缀并返回提示词
+  return {
+    prompt: input.replace(/^\/(?:image|img)\s+/, '').trim(),
+  }
 }
 
 async function handleSend() {
@@ -52,9 +34,9 @@ async function handleSend() {
 
   try {
     if (isImageGeneration.value) {
-      // 处理图片生成命令
-      const { prompt, size, n } = parseImageCommand(messageInput.value)
-      await chatStore.sendImagePrompt(prompt, { size: size as '256x256' | '512x512' | '1024x1024', n })
+      // 处理图片生成命令，使用默认参数
+      const { prompt } = parseImageCommand(messageInput.value)
+      await chatStore.sendImagePrompt(prompt)
     }
     else {
       // 处理普通文本消息
@@ -75,7 +57,7 @@ function handleUpload() {
 // 输入提示信息
 const inputPlaceholder = computed(() => {
   if (isImageGeneration.value)
-    return '输入图片描述，可选参数：--size [256x256|512x512|1024x1024] --n [1-10]'
+    return '输入图片描述，使用 /image 或 /img 生成图片...'
 
   return '输入消息，使用 /image 或 /img 生成图片...'
 })
@@ -112,7 +94,7 @@ const inputPlaceholder = computed(() => {
       </div>
       <!-- 命令提示 -->
       <div v-if="isImageGeneration" class="command-tips">
-        示例：/image 一只可爱的猫咪 --size 1024x1024 --n 1
+        示例：/image 一只可爱的猫咪
       </div>
       <!-- 免责声明 -->
       <div class="disclaimer">
