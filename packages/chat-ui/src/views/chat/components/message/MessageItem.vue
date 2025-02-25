@@ -249,6 +249,11 @@ function handleCopy() {
   }
 }
 
+// 添加最后一条消息的样式
+.message-item:last-child .message-footer {
+  opacity: 1;
+}
+
 @keyframes bounce {
   0%, 80%, 100% {
     transform: scale(0);

@@ -56,6 +56,35 @@ function handleImageError(e: Event) {
   const img = e.target as HTMLImageElement
   img.classList.add('error')
 }
+
+// 添加下载方法
+async function handleDownload(url: string) {
+  try {
+    // 获取图片数据
+    const response = await fetch(url)
+    const blob = await response.blob()
+
+    // 创建下载链接
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+
+    // 从 URL 中提取文件名，如果没有则使用时间戳
+    const filename = url.split('/').pop() || `image-${Date.now()}.png`
+    link.download = filename
+
+    // 触发下载
+    document.body.appendChild(link)
+    link.click()
+
+    // 清理
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
+  }
+  catch (error) {
+    console.error('下载图片失败:', error)
+  }
+}
 </script>
 
 <template>
@@ -80,6 +109,13 @@ function handleImageError(e: Event) {
         class="image-item"
         @click="handlePreview(url)"
       >
+        <!-- 下载按钮 -->
+        <div class="download-button" title="下载图片" @click.stop="handleDownload(url)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+
         <img
           :src="url"
           :alt="message.content"
@@ -244,5 +280,31 @@ function handleImageError(e: Event) {
     stroke-dasharray: 90, 150;
     stroke-dashoffset: -124;
   }
+}
+
+.download-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+
+.download-button:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.image-item:hover .download-button {
+  opacity: 1;
 }
 </style>
