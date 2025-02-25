@@ -1,13 +1,15 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
-import { PaperClipOutlined, SendOutlined } from '@ant-design/icons-vue'
-import { Button, Input, message } from 'ant-design-vue'
+import { PaperClipOutlined, PictureOutlined, SendOutlined } from '@ant-design/icons-vue'
+import { Button, Input, Modal, message } from 'ant-design-vue'
 import { useChatStore } from '../../store/chat'
 import { chatService } from '../../api/chat'
+import ImageGeneration from '../../components/image-generation/index.vue'
 
 const { TextArea } = Input
 const messageInput = ref('')
 const chatStore = useChatStore()
+const showImageModal = ref(false)
 
 async function handleSend() {
   // 如果输入框为空，则不发送消息
@@ -37,6 +39,14 @@ function handleUpload() {
   // TODO: 实现文件上传功能
   message.info('文件上传功能开发中')
 }
+
+function openImageGeneration() {
+  showImageModal.value = true
+}
+
+function closeImageGeneration() {
+  showImageModal.value = false
+}
 </script>
 
 <template>
@@ -54,6 +64,10 @@ function handleUpload() {
         />
         <!-- 按钮 -->
         <div class="action-buttons">
+          <!-- 图片生成按钮 -->
+          <Button type="text" class="action-btn image-button" @click="openImageGeneration">
+            <PictureOutlined />
+          </Button>
           <!-- 上传按钮 -->
           <Button type="text" class="action-btn upload-button" @click="handleUpload">
             <PaperClipOutlined />
@@ -76,6 +90,17 @@ function handleUpload() {
         免责声明：AI可能会产生错误信息，请自行判断和验证重要信息
       </div>
     </div>
+
+    <!-- 图片生成弹窗 -->
+    <Modal
+      v-model:visible="showImageModal"
+      title="生成图片"
+      :footer="null"
+      width="600px"
+      @cancel="closeImageGeneration"
+    >
+      <ImageGeneration placeholder="描述你想要生成的图片..." />
+    </Modal>
   </div>
 </template>
 
@@ -103,7 +128,7 @@ function handleUpload() {
     .message-input {
       border: none !important;
       background: transparent !important;
-      padding: 0.875rem 7rem 0.875rem 1.25rem;
+      padding: 0.875rem 9rem 0.875rem 1.25rem;
       resize: none;
       font-size: 0.9375rem;
 
@@ -136,6 +161,7 @@ function handleUpload() {
     border-radius: 0.5rem;
   }
 
+  .image-button,
   .upload-button {
     color: #666;
 
@@ -167,5 +193,17 @@ function handleUpload() {
     text-align: center;
     color: #666;
   }
+}
+
+:deep(.ant-modal-content) {
+  padding: 20px !important;
+}
+
+:deep(.ant-modal-header) {
+  margin-bottom: 16px;
+}
+
+:deep(.ant-modal-body) {
+  padding: 0;
 }
 </style>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import MarkdownRenderer from '@muggle-chat/chat-ui/src/components/markdown/MarkdownRenderer.vue'
 import type { Message } from '@muggle-chat/chat-ui/src/store/chat.ts'
+import ImageMessage from '../../../../components/image-generation/ImageMessage.vue'
 import MessageStatus from './MessageStatus.vue'
 
 const props = defineProps<Props>()
@@ -58,6 +59,10 @@ function handleCopy() {
     <div class="content">
       <!-- 消息内容 -->
       <div class="message-content">
+        <template v-if="message.type === 'image'">
+          <ImageMessage :message="message" :show-metadata="message.role === 'assistant'" />
+        </template>
+        <template v-else>
         <template v-if="message.status === 'sending' && message.role === 'assistant'">
           <template v-if="!message.content">
             <div class="loading-dots">
@@ -72,6 +77,7 @@ function handleCopy() {
         </template>
         <template v-else>
           <MarkdownRenderer :content="message.content" />
+          </template>
         </template>
       </div>
 
@@ -107,6 +113,10 @@ function handleCopy() {
     .message-content {
       background-color: #1a1a1a;
       color: white;
+
+      :deep(.image-message) {
+        background: transparent;
+      }
     }
 
     .message-footer {

@@ -1,132 +1,184 @@
 # Muggle Chat
 
-一个基于 Vue 3 + TypeScript + Ant Design Vue 构建的现代化聊天应用界面。
+基于 Vue 3 生态系统打造的现代化 AI 聊天应用，采用 Monorepo 架构设计。
 
-## 功能特性
+## 🌟 项目概览
 
-- 💡 现代化的 UI 设计，参考 Vercel 设计风格
-- 🔥 基于 Vue 3 Composition API
-- 🎨 使用 Ant Design Vue 组件库
-- 📦 TypeScript 支持
-- 🎯 响应式布局设计
-- 🌓 优雅的动画过渡效果
+Muggle Chat 是一个优雅的 AI 聊天应用界面，采用类似 ChatGPT 的交互设计，提供流畅的对话体验和精致的界面设计。
 
-## 技术栈
+### 核心特性
 
-- Vue 3
-- TypeScript
-- Ant Design Vue
-- Less
-- Vite
+- 🤖 智能对话：支持流式响应的 AI 对话功能
+- 🎯 Monorepo 架构：基于 pnpm workspace 的项目组织
+- 💡 Vue 3 + TypeScript：完整的类型支持
+- 🎨 Ant Design Vue：美观的 UI 组件库
+- 📱 响应式设计：完美适配多端设备
+- ⚡️ 实时反馈：流式响应和打字机效果
+- 🔄 上下文续航：支持对话上下文管理
+- 📝 消息编辑：支持消息重试和编辑功能
 
-## 设计特点
+## 🔧 技术栈
 
-- 简约现代的黑白配色
-- 精心设计的间距和对齐
-- 流畅的动画过渡
-- 优雅的交互反馈
-- 一致的设计语言
+- **核心框架：** Vue 3 + Composition API
+- **开发语言：** TypeScript
+- **UI 框架：** Ant Design Vue
+- **状态管理：** Pinia
+- **构建工具：** Vite
+- **包管理器：** pnpm
+- **代码规范：** ESLint + Prettier
+- **样式预处理：** Less/SCSS
 
-## 目录结构
+## 📁 项目结构
 
 ```
-packages/chat-ui/
-├── src/
-│   ├── views/
-│   │   └── chat/
-│   │       ├── index.vue      # 主布局组件
-│   │       ├── Header.vue     # 顶部导航组件
-│   │       ├── Sider.vue      # 侧边栏组件
-│   │       ├── Content.vue    # 聊天内容组件
-│   │       └── Footer.vue     # 底部输入组件
-│   ├── assets/               # 静态资源
-│   ├── router/              # 路由配置
-│   └── store/               # 状态管理
+muggle-chat/
+├── packages/
+│   ├── chat-ui/                # 前端UI模块
+│   │   ├── src/
+│   │   │   ├── api/           # API 接口定义
+│   │   │   ├── assets/        # 静态资源
+│   │   │   ├── components/    # 公共组件
+│   │   │   ├── config/        # 配置文件
+│   │   │   ├── store/         # Pinia 状态管理
+│   │   │   ├── types/         # TypeScript 类型定义
+│   │   │   ├── utils/         # 工具函数
+│   │   │   └── views/         # 页面组件
+│   │   │       └── chat/      # 聊天相关组件
+│   │   │           ├── components/  # 聊天子组件
+│   │   │           ├── Content.vue  # 消息内容组件
+│   │   │           ├── Footer.vue   # 输入框组件
+│   │   │           ├── Header.vue   # 顶部导航组件
+│   │   │           ├── Sider.vue    # 侧边栏组件
+│   │   │           └── index.vue    # 聊天主页面
+│   │   └── vite.config.ts     # Vite 配置
+│   └── service/               # 后端服务（规划中）
+├── doc/                       # 项目文档
+└── assets/                    # 公共资源
+
 ```
 
-## 组件说明
+## 💡 主要功能
 
-### 主布局 (index.vue)
-- 整体页面布局
-- 响应式侧边栏
-- 组件组织与管理
+### 对话功能
 
-### 顶部导航 (Header.vue)
-- 显示应用 Logo
-- 用户头像与下拉菜单
-- 设置和退出登录功能
+- ✅ 流式消息响应
+- ✅ 消息重试机制
+- ✅ 消息编辑功能
+- ✅ 消息复制功能
+- ✅ 代码块语法高亮
+- ✅ Markdown 渲染
+- ✅ 打字机效果
 
-### 侧边栏 (Sider.vue)
-- 新建对话按钮
-- 对话历史列表
-- 可折叠/展开功能
-- 支持选中状态
+### 会话管理
 
-### 聊天内容 (Content.vue)
-- 消息展示区域
-- 支持用户和助手两种消息类型
-- 头像显示
-- 消息气泡样式
+- ✅ 会话创建与切换
+- ✅ 会话记录保存
+- ✅ 会话列表管理
+- ✅ 响应式侧边栏
 
-### 底部输入 (Footer.vue)
-- 消息输入框
-- 文件上传功能
-- 发送按钮
-- 免责声明
+### 用户界面
 
-## 样式特点
+- ✅ 响应式布局设计
+- ✅ 自定义滚动条样式
+- ✅ 平滑动画过渡
+- ✅ 消息状态提示
+- ✅ 错误重试机制
 
-- 采用亮色主题设计
-- 统一的颜色系统
-- 精心设计的间距和对齐
-- 细致的交互反馈
-- 平滑的动画过渡
+## 🚀 快速开始
 
-## 使用说明
+### 环境要求
 
-1. 安装依赖：
+- Node.js >= 16
+- pnpm >= 8
+
+### 开发设置
+
+1. 克隆项目
+
+```bash
+git clone <repository-url>
+cd muggle-chat
+```
+
+2. 安装依赖
+
 ```bash
 pnpm install
 ```
 
-2. 启动开发服务器：
+3. 配置环境变量
+
 ```bash
-pnpm dev
+cp packages/chat-ui/.env.example packages/chat-ui/.env
 ```
 
-3. 构建生产版本：
+4. 启动开发服务器
+
 ```bash
-pnpm build
+# 启动前端开发服务
+pnpm chat:dev
 ```
 
-## 主要功能
+## 📋 开发计划
 
-1. 对话管理
-   - 创建新对话
-   - 查看历史对话
-   - 切换当前对话
+### 近期计划
 
-2. 消息功能
-   - 发送文本消息
-   - 上传文件（预留）
-   - 消息历史记录
+- [ ] 深色模式支持
+- [ ] 文件上传与预览
+- [ ] 代码块一键复制
+- [ ] 消息搜索功能
+- [ ] 快捷键支持
 
-3. 用户功能
-   - 用户设置
-   - 退出登录
+### 长期规划
 
-## 开发计划
+- [ ] 多模型支持
+- [ ] 插件系统
+- [ ] 会话导出功能
+- [ ] 国际化支持
+- [ ] 语音输入支持
 
-- [ ] 添加深色模式支持
-- [ ] 实现文件上传功能
-- [ ] 添加消息搜索功能
-- [ ] 支持更多消息类型
-- [ ] 添加对话分组功能
+## 📄 开发规范
 
-## 贡献指南
+### 代码规范
 
-欢迎提交 Issue 和 Pull Request 来帮助改进项目。
+- 使用 Composition API 组织逻辑
+- 使用 TypeScript 强类型开发
+- 组件属性和事件使用 defineProps 和 defineEmits
+- 保持组件的单一职责
+- 使用 Pinia 进行状态管理
 
-## 许可证
+### Git 提交规范
+
+- feat: 新功能
+- fix: 修复问题
+- docs: 文档修改
+- style: 代码格式修改
+- refactor: 代码重构
+- test: 测试用例修改
+- chore: 其他修改
+
+## 🔑 环境变量
+
+在 `.env` 文件中配置以下环境变量：
+
+```bash
+# API 配置
+VITE_API_BASE_URL=http://localhost:3000
+VITE_API_TIMEOUT=30000
+
+# 应用配置
+VITE_APP_TITLE=Muggle Chat
+VITE_APP_DESCRIPTION=AI Chat Application
+```
+
+## 📚 相关文档
+
+- [Vue 3 文档](https://v3.vuejs.org/)
+- [TypeScript 文档](https://www.typescriptlang.org/)
+- [Ant Design Vue 文档](https://antdv.com/)
+- [Vite 文档](https://vitejs.dev/)
+- [Pinia 文档](https://pinia.vuejs.org/)
+
+## 📝 许可证
 
 [MIT License](LICENSE)
