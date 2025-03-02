@@ -15,7 +15,6 @@ declare module 'vue' {
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
     AModal: typeof import('ant-design-vue/es')['Modal']
     ApiKeySettings: typeof import('./src/components/settings/ApiKeySettings.vue')['default']
-    ImageGeneration: typeof import('./src/components/image-generation/index.vue')['default']
     ImageMessage: typeof import('./src/components/image-generation/ImageMessage.vue')['default']
     InlineChatBox: typeof import('./src/components/inline-chat/InlineChatBox.vue')['default']
     InlineChatDialog: typeof import('./src/components/inline-chat/InlineChatDialog.vue')['default']

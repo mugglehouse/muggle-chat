@@ -4,7 +4,7 @@ interface Props {
   role: 'user' | 'assistant'
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 const emit = defineEmits<{
   retry: []
   copy: []
@@ -13,7 +13,7 @@ const emit = defineEmits<{
 
 const statusConfig = {
   sending: {
-    icon: '...',
+    icon: '⋯',
     text: '发送中...',
   },
   success: {
@@ -24,13 +24,18 @@ const statusConfig = {
     icon: '⚠',
     text: '发送失败',
   },
+} as const
+
+// 获取状态配置，如果未找到则使用默认值
+function getStatusConfig(status: Props['status']) {
+  return statusConfig[status] || { icon: '⋯', text: '未知状态' }
 }
 </script>
 
 <template>
   <div class="message-status" :class="status">
-    <span class="status-icon" :title="statusConfig[status].text">
-      {{ statusConfig[status].icon }}
+    <span class="status-icon" :title="getStatusConfig(status).text">
+      {{ getStatusConfig(status).icon }}
     </span>
 
     <div class="actions">
