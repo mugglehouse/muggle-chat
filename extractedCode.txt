@@ -1,0 +1,2970 @@
+export {}
+declare module 'vue' {
+  export interface GlobalComponents {
+    AAvatar: typeof import('ant-design-vue/es')['Avatar']
+    AButton: typeof import('ant-design-vue/es')['Button']
+    ADropdown: typeof import('ant-design-vue/es')['Dropdown']
+    AInput: typeof import('ant-design-vue/es')['Input']
+    AMenu: typeof import('ant-design-vue/es')['Menu']
+    AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
+    AModal: typeof import('ant-design-vue/es')['Modal']
+    ApiKeySettings: typeof import('./src/components/settings/ApiKeySettings.vue')['default']
+    ImageMessage: typeof import('./src/components/image-generation/ImageMessage.vue')['default']
+    InlineChatBox: typeof import('./src/components/inline-chat/InlineChatBox.vue')['default']
+    InlineChatDialog: typeof import('./src/components/inline-chat/InlineChatDialog.vue')['default']
+    InlineChatInput: typeof import('./src/components/inline-chat/InlineChatInput.vue')['default']
+    MarkdownRenderer: typeof import('./src/components/markdown/MarkdownRenderer.vue')['default']
+    RouterLink: typeof import('vue-router')['RouterLink']
+    RouterView: typeof import('vue-router')['RouterView']
+  }
+}
+export const API_CONFIG = {
+  baseURL: import.meta.env.VITE_OPENAI_API_URL,
+  model: import.meta.env.VITE_OPENAI_API_MODEL,
+  temperature: Number(import.meta.env.VITE_OPENAI_API_TEMPERATURE),
+  imageGeneration: {
+    model: 'dall-e-3',
+    defaultSize: '1024x1024',
+    maxTokens: 1000,
+    supportedFormats: ['url', 'b64_json'],
+    limits: {
+      maxImages: 10,
+      minSize: 256,
+      maxSize: 1024,
+    },
+  },
+}
+export const APP_CONFIG = {
+  title: import.meta.env.VITE_APP_TITLE,
+  description: import.meta.env.VITE_APP_DESCRIPTION,
+}
+export const DEV_CONFIG = {
+  isDev: import.meta.env.VITE_DEV_MODE === 'true',
+  useMock: import.meta.env.VITE_API_MOCK === 'true',
+}
+export const STORAGE_KEYS = {
+  apiKey: 'openai_api_key',
+  theme: 'app_theme',
+  sessions: 'chat_sessions',
+  imageSettings: 'image_generation_settings',
+}
+export const UI_CONFIG = {
+  messageMaxLength: 4000,
+  historyMaxLength: 100,
+  imageGeneration: {
+    defaultSize: '1024x1024',
+    supportedTypes: ['png', 'jpeg'],
+    thumbnailSize: '256x256',
+    previewSize: '512x512',
+  },
+}
+export const DEFAULT_CONFIG = {
+  theme: 'light',
+  language: 'zh-CN',
+  pageSize: 20,
+}
+export interface BaseMessage {
+  id: string
+  role: 'user' | 'assistant'
+  timestamp: number
+  status: 'sending' | 'success' | 'error'
+}
+export interface TextMessage extends BaseMessage {
+  type: 'text'
+  content: string
+}
+export interface ImageMessage extends BaseMessage {
+  type: 'image'
+  content: string
+  imageUrls: string[]
+  metadata?: ImageMetadata
+}
+export interface ImageMetadata {
+  size: '256x256' | '512x512' | '1024x1024'
+  n: number
+  model?: string
+  created: number
+  description?: string
+}
+export type Message = TextMessage | ImageMessage
+export interface ImageGenerationOptions {
+  prompt: string
+  n?: number
+  size?: '256x256' | '512x512' | '1024x1024'
+  response_format?: 'url' | 'b64_json'
+  user?: string
+}
+export interface ImageGenerationResponse {
+  created: number
+  data: ImageData[]
+}
+export interface ImageData {
+  url?: string
+  b64_json?: string
+  revised_prompt?: string
+  prompt?: string
+}
+export interface ImageGenerationError {
+  message: string
+  type: string
+  code: string
+}
+import type { App } from 'vue'
+import { createPinia } from 'pinia'
+import { useChatStore } from './chat'
+const store = createPinia()
+export function setupStore(app: App) {
+  app.use(store)
+}
+export { useChatStore }
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import { chatService } from '../api/chat'
+import { imageService } from '../api/image'
+import { STORAGE_KEYS } from '../config'
+export interface BaseMessage {
+  id: string
+  role: 'user' | 'assistant'
+  timestamp: number
+  status: 'sending' | 'success' | 'error'
+}
+export interface TextMessage extends BaseMessage {
+  type: 'text'
+  content: string
+}
+export interface ImageMessage extends BaseMessage {
+  type: 'image'
+  content: string
+  imageUrls: string[]
+  metadata?: {
+    size: '256x256' | '512x512' | '1024x1024'
+    n: number
+    model?: string
+    created: number
+    description?: string
+  }
+}
+export type Message = TextMessage | ImageMessage
+export interface ChatSession {
+  id: string 
+  title: string 
+  messages: Message[] 
+  createdAt: number 
+  updatedAt: number 
+}
+export const useChatStore = defineStore('chat', () => {
+  const currentSessionId = ref('') 
+  const sessions = ref<ChatSession[]>([]) 
+  const loading = ref(false) 
+  const error = ref<string | null>(null) 
+  const initSessions = () => {
+    const savedSessions = localStorage.getItem(STORAGE_KEYS.sessions)
+    if (savedSessions) {
+      sessions.value = JSON.parse(savedSessions)
+      sessions.value.sort((a, b) => b.updatedAt - a.updatedAt)
+      if (sessions.value.length > 0)
+        currentSessionId.value = sessions.value[0].id
+    }
+  }
+  const saveSessions = () => {
+    localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(sessions.value))
+  }
+  const currentSession = computed(() =>
+    sessions.value.find(session => session.id === currentSessionId.value),
+  )
+  const currentMessages = computed(() =>
+    currentSession.value?.messages || [],
+  )
+  const sessionList = computed(() =>
+    sessions.value
+      .map(({ id, title, updatedAt }) => ({ id, title, updatedAt }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
+  )
+  function createSession() {
+    const newSession: ChatSession = {
+      id: Date.now().toString(),
+      title: '新对话',
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    sessions.value.push(newSession)
+    currentSessionId.value = newSession.id
+    saveSessions()
+  }
+  function switchSession(sessionId: string) {
+    currentSessionId.value = sessionId
+  }
+  async function sendMessage(content: string) {
+    if (!content.trim())
+      return
+    if (!currentSessionId.value)
+      createSession()
+    const userMessage: TextMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      type: 'text',
+      content,
+      timestamp: Date.now(),
+      status: 'sending',
+    }
+    const session = sessions.value.find(s => s.id === currentSessionId.value)
+    if (!session)
+      return
+    session.messages = [...session.messages, userMessage]
+    session.updatedAt = Date.now()
+    saveSessions()
+    try {
+      loading.value = true
+      error.value = null
+      const aiMessage: TextMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        type: 'text',
+        content: '',
+        timestamp: Date.now(),
+        status: 'sending',
+      }
+      session.messages = [...session.messages, aiMessage]
+      saveSessions()
+      const response = await chatService.sendStreamMessage(
+        session.messages.slice(0, -1), 
+        {},
+        (text) => {
+          const messageIndex = session.messages.findIndex(msg => msg.id === aiMessage.id)
+          if (messageIndex !== -1) {
+            const updatedMessages = [...session.messages]
+            updatedMessages[messageIndex] = {
+              ...aiMessage,
+              content: text,
+            }
+            console.log('updatedMessages', updatedMessages[messageIndex])
+            session.messages = updatedMessages
+            session.updatedAt = Date.now()
+            saveSessions()
+          }
+        },
+      )
+      const finalMessages = [...session.messages]
+      const userIndex = finalMessages.findIndex(msg => msg.id === userMessage.id)
+      const aiIndex = finalMessages.findIndex(msg => msg.id === aiMessage.id)
+      if (userIndex !== -1) {
+        finalMessages[userIndex] = {
+          ...userMessage,
+          status: 'success',
+        }
+      }
+      if (aiIndex !== -1) {
+        finalMessages[aiIndex] = {
+          ...aiMessage,
+          content: response.content,
+          status: 'success',
+        }
+      }
+      session.messages = finalMessages
+      session.updatedAt = Date.now()
+      if (session.messages.length === 2)
+        session.title = content.slice(0, 20) + (content.length > 20 ? '...' : '')
+      saveSessions()
+    }
+    catch (err) {
+      const errorMessages = [...session.messages]
+      const userIndex = errorMessages.findIndex(msg => msg.id === userMessage.id)
+      if (userIndex !== -1) {
+        errorMessages[userIndex] = {
+          ...errorMessages[userIndex],
+          status: 'error',
+        }
+      }
+      session.messages = errorMessages
+      error.value = '发送消息失败'
+      console.error('发送消息失败:', err)
+      saveSessions()
+    }
+    finally {
+      loading.value = false
+    }
+  }
+  async function sendImagePrompt(
+    prompt: string,
+  ) {
+    if (!prompt.trim())
+      return
+    if (!currentSessionId.value)
+      createSession()
+    const userMessage: ImageMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      type: 'image',
+      content: prompt,
+      imageUrls: [],
+      timestamp: Date.now(),
+      status: 'sending',
+    }
+    const session = sessions.value.find(s => s.id === currentSessionId.value)
+    if (!session)
+      return
+    session.messages = [...session.messages, userMessage]
+    session.updatedAt = Date.now()
+    saveSessions()
+    try {
+      loading.value = true
+      error.value = null
+      const aiMessage: ImageMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        type: 'image',
+        content: '',
+        imageUrls: [],
+        timestamp: Date.now(),
+        status: 'sending',
+        metadata: {
+          size: '1024x1024',
+          n: 1,
+          model: 'dall-e-3',
+          created: Date.now(),
+        },
+      }
+      session.messages = [...session.messages, aiMessage]
+      saveSessions()
+      const response = await imageService.generateImage(
+        {
+          prompt,
+          size: '1024x1024',
+          n: 1,
+        },
+      )
+      const finalMessages = [...session.messages]
+      const userIndex = finalMessages.findIndex(msg => msg.id === userMessage.id)
+      const aiIndex = finalMessages.findIndex(msg => msg.id === aiMessage.id)
+      if (userIndex !== -1) {
+        finalMessages[userIndex] = {
+          ...userMessage,
+          status: 'success',
+        }
+      }
+      if (aiIndex !== -1 && response.data && response.data.length > 0) {
+        finalMessages[aiIndex] = {
+          ...aiMessage,
+          imageUrls: response.data.map(item => item.url || ''),
+          status: 'success',
+          metadata: {
+            ...aiMessage.metadata,
+            description: response.data[0].revised_prompt || response.data[0].prompt || prompt,
+          },
+        }
+      }
+      session.messages = finalMessages
+      session.updatedAt = Date.now()
+      if (session.messages.length === 2)
+        session.title = prompt.slice(0, 20) + (prompt.length > 20 ? '...' : '')
+      saveSessions()
+    }
+    catch (err: any) {
+      const errorMessages = [...session.messages]
+      const userIndex = errorMessages.findIndex(msg => msg.id === userMessage.id)
+      if (userIndex !== -1) {
+        errorMessages[userIndex] = {
+          ...errorMessages[userIndex],
+          status: 'error',
+        }
+      }
+      session.messages = errorMessages
+      error.value = err.message || '图片生成失败'
+      console.error('图片生成失败:', err)
+      saveSessions()
+    }
+    finally {
+      loading.value = false
+    }
+  }
+  function clearCurrentSession() {
+    const session = sessions.value.find(s => s.id === currentSessionId.value)
+    if (session) {
+      session.messages = []
+      session.updatedAt = Date.now()
+      saveSessions()
+    }
+  }
+  function deleteSession(sessionId: string) {
+    const index = sessions.value.findIndex(s => s.id === sessionId)
+    if (index > -1) {
+      sessions.value.splice(index, 1)
+      if (sessionId === currentSessionId.value)
+        currentSessionId.value = sessions.value[0]?.id || ''
+      saveSessions()
+    }
+  }
+  function updateSessionTitle(sessionId: string, title: string) {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      session.title = title
+      session.updatedAt = Date.now()
+      saveSessions()
+    }
+  }
+  initSessions()
+  return {
+    currentSessionId,
+    sessions,
+    loading,
+    error,
+    currentSession,
+    currentMessages,
+    sessionList,
+    createSession,
+    switchSession,
+    sendMessage,
+    sendImagePrompt,
+    clearCurrentSession,
+    deleteSession,
+    updateSessionTitle,
+  }
+})
+<script lang="ts" setup>
+import { computed, nextTick, ref } from 'vue'
+import { DeleteOutlined, EditOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { Modal, message } from 'ant-design-vue'
+import { useChatStore } from '../../store/chat'
+const collapsed = defineModel<boolean>()
+const chatStore = useChatStore()
+const selectedKeys = computed(() => [chatStore.currentSessionId])
+const sessionList = computed(() => chatStore.sessionList)
+const searchKeyword = ref('')
+const isSearching = ref(false)
+const filteredSessionList = computed(() => {
+  if (!searchKeyword.value)
+    return sessionList.value
+  return sessionList.value.filter(session =>
+    session.title.toLowerCase().includes(searchKeyword.value.toLowerCase()),
+  )
+})
+function handleNewChat() {
+  chatStore.createSession()
+}
+function handleSelectSession(sessionId: string) {
+  chatStore.switchSession(sessionId)
+}
+function handleDeleteSession(e: Event, sessionId: string) {
+  e.stopPropagation() 
+  Modal.confirm({
+    title: '确认删除',
+    content: '确定要删除这个会话吗？此操作不可恢复。',
+    okText: '确认',
+    cancelText: '取消',
+    class: 'custom-modal',
+    async onOk() {
+      chatStore.deleteSession(sessionId)
+      message.success('删除成功')
+    },
+  })
+}
+const editingSessionId = ref<string | null>(null) 
+const editingTitle = ref('') 
+function startEdit(e: Event, sessionId: string, currentTitle: string) {
+  e.stopPropagation() 
+  editingSessionId.value = sessionId
+  editingTitle.value = currentTitle
+  nextTick(() => {
+    const input = document.querySelector(`input[data-session-id="${sessionId}"]`) as HTMLInputElement
+    if (input)
+      input.focus()
+  })
+}
+function handleEditTitle(sessionId: string, isEnterKey = false) {
+  if (!editingSessionId.value || (isEnterKey && sessionId !== editingSessionId.value))
+    return
+  const trimmedTitle = editingTitle.value.trim()
+  if (trimmedTitle) {
+    const session = sessionList.value.find(s => s.id === sessionId)
+    if (session && session.title !== trimmedTitle) {
+      chatStore.updateSessionTitle(sessionId, trimmedTitle)
+      message.success('修改成功')
+    }
+    editingSessionId.value = null
+  }
+}
+function toggleCollapse() {
+  collapsed.value = !collapsed.value
+}
+function startSearch() {
+  isSearching.value = true
+  nextTick(() => {
+    const input = document.querySelector('.search-input input') as HTMLInputElement
+    if (input)
+      input.focus()
+  })
+}
+function endSearch() {
+  isSearching.value = false
+  searchKeyword.value = ''
+}
+</script>
+<template>
+  <div class="chat-sider">
+    <!-- 顶部按钮组 -->
+    <div class="sider-header">
+      <div class="button-group">
+        <AButton
+          type="primary"
+          class="action-btn new-chat-btn"
+          @click="handleNewChat"
+        >
+          <template #icon>
+            <PlusOutlined />
+          </template>
+          <span v-if="!collapsed">新建对话</span>
+        </AButton>
+        <!-- 搜索按钮/输入框 -->
+        <template v-if="!collapsed">
+          <a-input
+            v-if="isSearching"
+            v-model:value="searchKeyword"
+            placeholder="搜索对话"
+            class="action-btn search-input"
+            :allow-clear="true"
+            @blur="endSearch"
+            @press-esc="endSearch"
+          >
+            <template #prefix>
+              <SearchOutlined />
+            </template>
+          </a-input>
+          <AButton
+            v-else
+            type="primary"
+            class="action-btn search-btn"
+            @click="startSearch"
+          >
+            <template #icon>
+              <SearchOutlined />
+            </template>
+            <span>搜索对话</span>
+          </AButton>
+        </template>
+      </div>
+    </div>
+    <!-- 会话列表 - 使用 filteredSessionList 替代 sessionList -->
+    <div class="chat-list">
+      <a-menu
+        v-model:selected-keys="selectedKeys"
+        :inline-collapsed="collapsed"
+        class="chat-menu"
+        @select="({ key }) => handleSelectSession(key as string)"
+      >
+        <!-- 会话项 -->
+        <a-menu-item
+          v-for="session in filteredSessionList"
+          :key="session.id"
+          class="chat-menu-item"
+        >
+          <div class="chat-item-content">
+            <!-- 编辑状态 -->
+            <template v-if="editingSessionId === session.id">
+              <input
+                :key="session.id"
+                v-model="editingTitle"
+                :data-session-id="session.id"
+                class="edit-title"
+                type="text"
+                @keyup.enter="handleEditTitle(session.id, true)"
+                @blur="handleEditTitle(session.id)"
+                @click.stop
+              >
+            </template>
+            <!-- 显示状态 -->
+            <template v-else>
+              <span class="chat-title">{{ session.title }}</span>
+              <div class="chat-actions">
+                <EditOutlined class="action-icon" @click.stop="(e) => startEdit(e, session.id, session.title)" />
+                <DeleteOutlined class="action-icon" @click.stop="(e) => handleDeleteSession(e, session.id)" />
+              </div>
+            </template>
+          </div>
+        </a-menu-item>
+      </a-menu>
+    </div>
+    <!-- 底部折叠按钮 -->
+    <div class="sider-footer">
+      <AButton type="text" class="collapse-btn" @click="toggleCollapse">
+        <MenuFoldOutlined v-if="!collapsed" />
+        <MenuUnfoldOutlined v-else />
+      </AButton>
+    </div>
+    <!-- 固定的展开按钮（收起状态显示） -->
+    <div v-if="collapsed" class="expand-btn" @click="toggleCollapse">
+      <MenuUnfoldOutlined />
+    </div>
+  </div>
+</template>
+<style lang="less">
+.custom-modal, .ant-modal-confirm, .ant-modal {
+  .ant-btn-primary {
+    background-color: #000 !important;
+    border-color: #000 !important;
+    &:hover {
+      background-color: #333 !important;
+      border-color: #333 !important;
+    }
+  }
+  .ant-modal-confirm-btns {
+    .ant-btn-primary {
+      background-color: #000 !important;
+      border-color: #000 !important;
+      &:hover {
+        background-color: #333 !important;
+        border-color: #333 !important;
+      }
+    }
+  }
+}
+</style>
+<style scoped lang="less">
+.chat-sider {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #f7f7f8;
+  position: relative;
+  .sider-header {
+    padding: 1rem;
+    border-bottom: 1px solid #eaeaea;
+    .button-group {
+      display: flex;
+      gap: 8px;
+      flex-direction: column;
+    }
+  }
+  .action-btn {
+    width: 100%;
+    background-color: #000;
+    border-color: #000;
+    &:hover {
+      background-color: #333;
+      border-color: #333;
+    }
+    &.search-input {
+      background-color: #fff;
+      transition: all 0.2s;
+      :deep(.ant-input) {
+        color: #000;
+        &::placeholder {
+          color: #666;
+        }
+      }
+      :deep(.ant-input-prefix) {
+        color: #666;
+      }
+      &:hover, &:focus-within {
+        border-color: #333;
+      }
+    }
+  }
+  .chat-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+  }
+  :deep(.chat-menu) {
+    border-inline-end: none !important;
+    background-color: #f7f7f8;
+    .chat-menu-item {
+      border-radius: 0.375rem;
+      margin: 0.25rem 0;
+      padding: 8px 12px !important;
+      height: auto !important;
+      line-height: 1.5;
+      background-color: #f7f7f8;
+      .chat-actions {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      &:hover {
+        background-color: #ececf1;
+        .chat-actions {
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
+        }
+      }
+      &.ant-menu-item-selected {
+        background-color: #ececf1;
+        color: #000;
+        &:hover .chat-actions {
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
+        }
+      }
+    }
+  }
+  .chat-item-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    position: relative;
+    .chat-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      padding-right: 50px;
+    }
+    .chat-actions {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 4px;
+      transition: all 0.2s ease;
+      background-color: inherit;
+      padding: 0 4px;
+      border-radius: 4px;
+      .action-icon {
+        font-size: 14px;
+        padding: 4px;
+        color: #666;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+        &:hover {
+          color: #000;
+          background-color: rgba(0, 0, 0, 0.06);
+        }
+      }
+    }
+    .edit-title {
+      flex: 1;
+      font-size: 14px;
+      padding: 4px 8px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+      outline: none;
+      background: #fff;
+      width: calc(100% - 16px); 
+      margin: 0;
+      &:hover, &:focus {
+        border-color: rgba(0, 0, 0, 0.2);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+      }
+    }
+  }
+  .sider-footer {
+    padding: 0.75rem;
+    border-top: 1px solid #eaeaea;
+    display: flex;
+    justify-content: center;
+    .collapse-btn {
+      color: #666;
+      &:hover {
+        color: #000;
+        background-color: #fafafa;
+      }
+    }
+  }
+  .expand-btn {
+    position: fixed;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 48px;
+    background-color: #fff;
+    border: 1px solid #eaeaea;
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #666;
+    transition: all 0.2s;
+    z-index: 100;
+    &:hover {
+      color: #000;
+      background-color: #fafafa;
+    }
+  }
+}
+</style>
+<script lang="ts" setup>
+import { ref } from 'vue'
+import Sider from './Sider.vue'
+import Header from './Header.vue'
+import Footer from './Footer.vue'
+import Content from './Content.vue'
+const siderCollapsed = ref(false)
+</script>
+<template>
+  <div class="app-container">
+    <!-- 侧边栏 -->
+    <aside class="app-sider" :class="{ collapsed: siderCollapsed }">
+      <Sider v-model="siderCollapsed" />
+    </aside>
+    <!-- 主内容区 -->
+    <main class="app-main">
+      <header class="app-header">
+        <Header />
+      </header>
+      <section class="app-content">
+        <Content />
+      </section>
+      <footer class="app-footer">
+        <Footer />
+      </footer>
+    </main>
+  </div>
+</template>
+<style scoped lang="less">
+.app-container {
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+.app-sider {
+  flex-shrink: 0;
+  width: 256px;
+  border-right: 1px solid #eaeaea;
+  transition: all 0.3s;
+  background-color: #f7f7f8;
+  overflow: hidden;
+  &.collapsed {
+    width: 0;
+    border-right: none;
+  }
+}
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+  min-width: 0;
+  position: relative;
+}
+.app-header {
+  height: 3.5rem;
+  border-bottom: 1px solid #eaeaea;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+.app-content {
+  flex: 1;
+  background-color: #fff;
+  overflow-y: auto;
+  position: relative;
+  scrollbar-width: thin; 
+  -ms-overflow-style: none; 
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent; 
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.2);
+    }
+  }
+}
+.app-footer {
+  border-top: 1px solid #eaeaea;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+:deep(.ant-layout) {
+  background: transparent;
+}
+</style>
+<script lang="ts" setup>
+import { ref } from 'vue'
+import { UserOutlined } from '@ant-design/icons-vue'
+import ApiKeySettings from '../../components/settings/ApiKeySettings.vue'
+import { InlineChatDialog } from '../../components/inline-chat'
+const showSettings = ref(false)
+const showInlineChat = ref(false)
+function openSettings() {
+  showSettings.value = true
+}
+function closeSettings() {
+  showSettings.value = false
+}
+</script>
+<template>
+  <div class="chat-header">
+    <!-- logo -->
+    <h1 class="logo">
+      Muggle Chat
+    </h1>
+    <!-- 右侧操作区 -->
+    <div class="right-actions">
+      <!-- 内联对话框 -->
+      <div class="inline-chat">
+        <Button
+          class="inline-chat-btn"
+          @click="() => showInlineChat = true"
+        >
+          <!-- <MessageOutlined /> -->
+          <span>切换内联模式</span>
+        </Button>
+        <!-- 内联模式背景板 -->
+        <div v-if="showInlineChat" class="inline-chat-wrapper">
+          <div class="inline-chat-background">
+            <InlineChatDialog
+              inline
+              @close="showInlineChat = false"
+            />
+          </div>
+        </div>
+      </div>
+      <!-- 个人中心 -->
+      <a-dropdown placement="bottomRight">
+        <!-- 头像 -->
+        <div class="avatar-wrapper">
+          <a-avatar class="avatar">
+            <template #icon>
+              <UserOutlined />
+            </template>
+          </a-avatar>
+        </div>
+        <!-- 下拉框 -->
+        <template #overlay>
+          <a-menu class="user-menu">
+            <a-menu-item key="settings" @click="openSettings">
+              设置
+            </a-menu-item>
+            <a-menu-item key="logout">
+              退出登录
+            </a-menu-item>
+          </a-menu>
+        </template>
+      </a-dropdown>
+    </div>
+    <!-- 设置对话框 -->
+    <a-modal
+      v-model:visible="showSettings"
+      title="设置"
+      :footer="null"
+      width="500px"
+      @cancel="closeSettings"
+    >
+      <ApiKeySettings />
+    </a-modal>
+  </div>
+</template>
+<style scoped lang="less">
+.chat-header {
+  height: 100%;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  .logo {
+    color: #000;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  .right-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .inline-chat {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .avatar-wrapper {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 9999px;
+    transition: all 0.2s;
+    &:hover {
+      background-color: #fafafa;
+    }
+  }
+  .avatar {
+    background-color: #000;
+    color: #fff;
+  }
+}
+:deep(.user-menu) {
+  min-width: 120px;
+  border: 1px solid #eaeaea;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  .ant-dropdown-menu-item {
+    padding: 0.5rem 1rem;
+    &:hover {
+      background-color: #fafafa;
+      color: #000;
+    }
+  }
+}
+.inline-chat-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(4px);
+}
+.inline-chat-background {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.95));
+}
+.inline-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  background: #000;
+  transition: all 0.2s;
+  &:hover {
+    color: #fff;
+    background-color: #333;
+  }
+  .anticon {
+    font-size: 16px;
+  }
+}
+</style>
+<script lang="ts" setup>
+import { computed, ref } from 'vue'
+import { PaperClipOutlined, SendOutlined } from '@ant-design/icons-vue'
+import { Button, Input, message } from 'ant-design-vue'
+import { useChatStore } from '../../store/chat'
+import { chatService } from '../../api/chat'
+const { TextArea } = Input
+const messageInput = ref('')
+const chatStore = useChatStore()
+const isImageGeneration = computed(() => {
+  const input = messageInput.value.trim()
+  return input.startsWith('/image ') || input.startsWith('/img ')
+})
+function parseImageCommand(input: string): { prompt: string } {
+  return {
+    prompt: input.replace(/^\/(?:image|img)\s+/, '').trim(),
+  }
+}
+async function handleSend() {
+  if (!messageInput.value.trim())
+    return
+  if (!chatService.getApiKey()) {
+    message.error('请先在设置中配置 OpenAI API Key')
+    return
+  }
+  try {
+    if (isImageGeneration.value) {
+      const { prompt } = parseImageCommand(messageInput.value)
+      await chatStore.sendImagePrompt(prompt)
+    }
+    else {
+      await chatStore.sendMessage(messageInput.value)
+    }
+    messageInput.value = ''
+  }
+  catch (err) {
+    console.error('发送消息失败:', err)
+    message.error('发送消息失败，请重试')
+  }
+}
+function handleUpload() {
+  message.info('文件上传功能开发中')
+}
+const inputPlaceholder = computed(() => {
+  if (isImageGeneration.value)
+    return '输入图片描述，使用 /image 或 /img 生成图片...'
+  return '输入消息，使用 /image 或 /img 生成图片...'
+})
+</script>
+<template>
+  <div class="chat-footer">
+    <div class="input-container">
+      <!-- 输入框 -->
+      <div class="input-wrapper">
+        <TextArea
+          v-model:value="messageInput"
+          :placeholder="inputPlaceholder"
+          :auto-size="{ minRows: 1, maxRows: 4 }"
+          class="message-input"
+          :class="{ 'is-image-mode': isImageGeneration }"
+          @keypress.enter.prevent="handleSend"
+        />
+        <div class="action-buttons">
+          <Button type="text" class="action-btn upload-button" @click="handleUpload">
+            <PaperClipOutlined />
+          </Button>
+          <Button
+            type="primary"
+            class="action-btn send-button"
+            :disabled="!messageInput.trim()"
+            @click="handleSend"
+          >
+            <template #icon>
+              <SendOutlined />
+            </template>
+          </Button>
+        </div>
+      </div>
+      <!-- 命令提示 -->
+      <div v-if="isImageGeneration" class="command-tips">
+        示例：/image 一只可爱的猫咪
+      </div>
+      <!-- 免责声明 -->
+      <div class="disclaimer">
+        免责声明：AI可能会产生错误信息，请自行判断和验证重要信息
+      </div>
+    </div>
+  </div>
+</template>
+<style scoped lang="less">
+.chat-footer {
+  padding: 1rem 2rem 1.5rem;
+  .input-container {
+    max-width: 48rem;
+    margin: 0 auto;
+  }
+  .input-wrapper {
+    position: relative;
+    background-color: #fff;
+    border: 1px solid #eaeaea;
+    border-radius: 0.75rem;
+    transition: all 0.2s;
+    &:focus-within {
+      border-color: #000;
+      box-shadow: 0 0 0 1px #000;
+    }
+  }
+  .message-input {
+    border: none !important;
+    background: transparent !important;
+    padding: 0.875rem 9rem 0.875rem 1.25rem;
+    resize: none;
+    font-size: 0.9375rem;
+    &.is-image-mode {
+      background: rgba(0, 0, 0, 0.02) !important;
+    }
+    &:focus {
+      box-shadow: none;
+    }
+    &::placeholder {
+      color: #999;
+    }
+  }
+  .action-buttons {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+  }
+  .action-btn {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+  }
+  .upload-button {
+    color: #666;
+    &:hover {
+      color: #000;
+      background-color: #fafafa;
+    }
+  }
+  .send-button {
+    background-color: #000;
+    border-color: #000;
+    &:hover {
+      background-color: #333;
+      border-color: #333;
+    }
+    &:disabled {
+      background-color: #fafafa;
+      border-color: #eaeaea;
+      color: #999;
+    }
+  }
+  .command-tips {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: #666;
+    padding: 0 1rem;
+  }
+  .disclaimer {
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    text-align: center;
+    color: #666;
+  }
+}
+</style>
+import type { App } from 'vue'
+import type { RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
+const routes: RouteRecordRaw[] = [
+  {
+    path: '/',
+    name: 'Welcome',
+    component: () => import('../views/welcome/index.vue'),
+  },
+  {
+    path: '/chat',
+    name: 'Chat',
+    component: () => import('../views/chat/index.vue'),
+  },
+]
+export const router = createRouter({
+  history: createWebHistory(),
+  routes,
+  scrollBehavior: () => ({ left: 0, top: 0 }),
+})
+export async function setupRouter(app: App) {
+  app.use(router)
+  await router.isReady()
+}
+<script setup lang="ts">
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { message as antMessage } from 'ant-design-vue'
+import { useChatStore } from '../../store/chat'
+import { chatService } from '../../api/chat'
+import type { Message } from '../../store/chat'
+import MessageItem from './components/message/MessageItem.vue'
+const messageListRef = ref<HTMLElement | null>(null)
+const store = useChatStore()
+const { currentMessages } = storeToRefs(store)
+let observer: MutationObserver | null = null
+const shouldAutoScroll = ref(true)
+function isNearBottom() {
+  if (!messageListRef.value)
+    return true
+  const { scrollTop, scrollHeight, clientHeight } = messageListRef.value
+  return scrollHeight - scrollTop - clientHeight < 100
+}
+async function scrollToBottom() {
+  if (!shouldAutoScroll.value && !isNearBottom())
+    return
+  await nextTick()
+  if (messageListRef.value)
+    messageListRef.value.scrollTop = messageListRef.value.scrollHeight
+}
+function handleScroll() {
+  shouldAutoScroll.value = isNearBottom()
+}
+function initMessageObserver() {
+  if (!messageListRef.value)
+    return
+  observer = new MutationObserver(() => {
+    scrollToBottom()
+  })
+  observer.observe(messageListRef.value, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  })
+}
+onMounted(() => {
+  scrollToBottom()
+  initMessageObserver()
+})
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+})
+watch(
+  currentMessages,
+  () => {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  },
+  { deep: true, immediate: true },
+)
+async function handleRetry(msg: Message) {
+  try {
+    const messageIndex = currentMessages.value.findIndex(m => m.id === msg.id)
+    const contextMessages = currentMessages.value.slice(0, messageIndex + 1)
+    if (msg.role === 'assistant' && messageIndex > 0) {
+      msg.status = 'sending'
+      msg.content = '' 
+      const response = await chatService.sendStreamMessage(
+        contextMessages.slice(0, -1), 
+        {},
+        (text) => {
+          msg.content = text
+        },
+      )
+      msg.content = response.content
+      msg.status = 'success'
+    }
+    else if (msg.role === 'user') {
+      msg.status = 'sending'
+      await store.sendMessage(msg.content)
+    }
+  }
+  catch (err) {
+    console.error('重试消息失败:', err)
+    msg.status = 'error'
+    antMessage.error('重试失败，请稍后再试')
+  }
+}
+async function handleCopy(content: string) {
+  try {
+    await navigator.clipboard.writeText(content)
+    antMessage.success('复制成功')
+  }
+  catch (err) {
+    antMessage.error('复制失败')
+  }
+}
+async function handleEdit(msg: Message, newContent: string) {
+  try {
+    const messageIndex = currentMessages.value.findIndex(m => m.id === msg.id)
+    msg.content = newContent
+    msg.status = 'sending'
+    const session = store.currentSession
+    if (session) {
+      session.messages = session.messages.slice(0, messageIndex + 1)
+      await store.sendMessage(newContent)
+    }
+  }
+  catch (err) {
+    console.error('编辑消息失败:', err)
+    msg.status = 'error'
+    antMessage.error('编辑失败，请稍后再试')
+  }
+}
+</script>
+<template>
+  <div class="chat-content">
+    <!-- 消息列表 -->
+    <div
+      ref="messageListRef"
+      class="message-list"
+      @scroll="handleScroll"
+    >
+      <div class="message-container">
+        <template v-if="currentMessages.length">
+          <MessageItem
+            v-for="msg in currentMessages"
+            :key="msg.id"
+            :message="msg"
+            @retry="handleRetry"
+            @copy="handleCopy"
+            @edit="handleEdit"
+          />
+        </template>
+        <!-- 空状态 -->
+        <div v-else class="empty-state">
+          <div class="empty-icon">
+            💭
+          </div>
+          <div class="empty-text">
+            开始新的对话...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+<style lang="scss" scoped>
+.chat-content {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  .message-list {
+    flex: 1;
+    height: 100%;
+    overflow-y: scroll;
+    padding: 20px;
+    .message-container {
+      max-width: 768px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+    }
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #d9d9d9;
+      border-radius: 4px;
+      &:hover {
+        background: #bfbfbf;
+      }
+    }
+    scrollbar-width: thin;
+    scrollbar-color: #d9d9d9 transparent;
+  }
+}
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  padding: 20px;
+  width: 100%;
+  max-width: 768px; 
+  margin: 0 auto;
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+  .empty-text {
+    font-size: 16px;
+  }
+}
+</style>
+import { createApp } from 'vue'
+import './assets/style.css'
+import App from './app.vue'
+import { setupStore } from './store'
+import { setupRouter } from './router'
+async function bootstrap() {
+  const app = createApp(App)
+  setupStore(app)
+  await setupRouter(app)
+  app.mount('#app')
+}
+bootstrap()
+interface ImportMetaEnv {
+  readonly VITE_OPENAI_API_URL: string
+  readonly VITE_OPENAI_API_MODEL: string
+  readonly VITE_OPENAI_API_TEMPERATURE: string
+  readonly VITE_APP_TITLE: string
+  readonly VITE_APP_DESCRIPTION: string
+  readonly VITE_DEV_MODE?: string
+  readonly VITE_API_MOCK?: string
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue'
+  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>
+  export default component
+}
+<script setup lang="ts">
+interface Props {
+  status: 'sending' | 'success' | 'error'
+  role: 'user' | 'assistant'
+}
+const props = defineProps<Props>()
+const emit = defineEmits<{
+  retry: []
+  copy: []
+  edit: []
+}>()
+const statusConfig = {
+  sending: {
+    icon: '⋯',
+    text: '发送中...',
+  },
+  success: {
+    icon: '✓',
+    text: '已发送',
+  },
+  error: {
+    icon: '⚠',
+    text: '发送失败',
+  },
+} as const
+function getStatusConfig(status: Props['status']) {
+  return statusConfig[status] || { icon: '⋯', text: '未知状态' }
+}
+</script>
+<template>
+  <div class="message-status" :class="status">
+    <span class="status-icon" :title="getStatusConfig(status).text">
+      {{ getStatusConfig(status).icon }}
+    </span>
+    <div class="actions">
+      <!-- 只显示AI消息的重试和复制按钮 -->
+      <template v-if="role === 'assistant'">
+        <button
+          class="action-btn"
+          title="重试"
+          @click="emit('retry')"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m0 0H4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button
+          class="action-btn"
+          title="复制"
+          @click="emit('copy')"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </template>
+    </div>
+  </div>
+</template>
+<style lang="scss" scoped>
+.message-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  &.sending {
+    color: #666;
+  }
+  &.error {
+    color: #ff4d4f;
+  }
+}
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+}
+.actions {
+  display: flex;
+  gap: 4px;
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: #000;
+  }
+  svg {
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+  }
+  &:hover svg {
+    opacity: 1;
+  }
+}
+</style>
+<script setup lang="ts">
+import { computed } from 'vue'
+import MarkdownRenderer from '@muggle-chat/chat-ui/src/components/markdown/MarkdownRenderer.vue'
+import type { Message } from '@muggle-chat/chat-ui/src/store/chat.ts'
+import ImageMessage from '../../../../components/image-generation/ImageMessage.vue'
+import MessageStatus from './MessageStatus.vue'
+const props = defineProps<Props>()
+const emit = defineEmits<{
+  retry: [message: Message]
+  copy: [content: string]
+}>()
+interface Props {
+  message: Message
+}
+const formattedTime = computed(() => {
+  const date = new Date(props.message.timestamp)
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+})
+const avatarConfig = computed(() => ({
+  user: {
+    icon: '👩‍🎓',
+    alt: '用户',
+  },
+  assistant: {
+    icon: '🤖',
+    alt: 'AI助手',
+  },
+})[props.message.role])
+function handleRetry() {
+  emit('retry', props.message)
+}
+function handleCopy() {
+  emit('copy', props.message.content)
+}
+</script>
+<template>
+  <div class="message-item" :class="[message.role]">
+    <!-- 头像 -->
+    <div class="avatar" :title="avatarConfig.alt">
+      {{ avatarConfig.icon }}
+    </div>
+    <div class="content">
+      <!-- 消息内容 -->
+      <div class="message-wrapper">
+        <!-- 加载状态 -->
+        <template v-if="message.status === 'sending' && message.role === 'assistant' && !message.content">
+          <div class="message-bubble loading">
+            <div class="loading-dots">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        </template>
+        <!-- 正常内容 -->
+        <template v-else>
+          <!-- 文本内容 -->
+          <div v-if="message.content" class="message-bubble">
+            <MarkdownRenderer :content="message.content" />
+          </div>
+          <!-- 图片内容 -->
+          <div v-if="message.type === 'image'" class="message-image">
+            <ImageMessage :message="message" :show-metadata="message.role === 'assistant'" />
+          </div>
+        </template>
+      </div>
+      <!-- 消息状态和时间 -->
+      <div class="message-footer">
+        <span class="time">{{ formattedTime }}</span>
+        <MessageStatus
+          :status="message.status"
+          :role="message.role"
+          @retry="handleRetry"
+          @copy="handleCopy"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+<style lang="scss" scoped>
+.message-item {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  position: relative;
+  &.user {
+    flex-direction: row-reverse;
+    .content {
+      align-items: flex-end;
+    }
+    .message-bubble {
+      background-color: #1a1a1a;
+      color: white;
+      border: none;
+    }
+    .message-footer {
+      flex-direction: row-reverse;
+    }
+  }
+  &.assistant {
+    .message-bubble {
+      background: transparent;
+      border: none;
+    }
+  }
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 85%;
+}
+.message-bubble {
+  font-size: 15px;
+  line-height: 1.6;
+  word-break: break-word;
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: inline-block;
+  &.loading {
+    min-width: 60px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  :deep(p) {
+    margin: 0 0 1em;
+    line-height: 1.6;
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  :deep(pre) {
+    margin: 1em 0;
+    padding: 12px;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.04);
+    overflow-x: auto;
+  }
+}
+.message-image {
+  :deep(.image-message) {
+    background: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  img {
+    display: block;
+    max-width: 100%;
+    border-radius: 8px;
+  }
+}
+.loading-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background-color: #666;
+    display: inline-block;
+    animation: bounce 1.4s infinite ease-in-out both;
+    &:nth-child(1) {
+      animation-delay: -0.32s;
+    }
+    &:nth-child(2) {
+      animation-delay: -0.16s;
+    }
+  }
+}
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  .message-item:hover & {
+    opacity: 1;
+  }
+  .time {
+    transition: opacity 0.2s ease;
+  }
+}
+.message-item:last-child .message-footer {
+  opacity: 1;
+}
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1.0);
+  }
+}
+</style>
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { Button, Input, message } from 'ant-design-vue'
+import { chatService } from '../../api/chat'
+const apiKey = ref('')
+const error = ref('')
+const success = ref(false)
+async function validateApiKey(key: string) {
+  if (!key || !key.startsWith('sk-') || key.length < 32)
+    throw new Error('API Key 格式不正确，应以 sk- 开头')
+}
+async function saveApiKey() {
+  try {
+    if (!apiKey.value) {
+      error.value = '请输入 API Key'
+      return
+    }
+    await validateApiKey(apiKey.value)
+    chatService.setApiKey(apiKey.value.trim())
+    success.value = true
+    error.value = ''
+    message.success('API Key 已保存')
+    setTimeout(() => {
+      success.value = false
+    }, 3000)
+  }
+  catch (err) {
+    error.value = err instanceof Error ? err.message : '保存 API Key 失败'
+    message.error(error.value)
+  }
+}
+function initApiKey() {
+  const savedApiKey = chatService.getApiKey()
+  if (savedApiKey)
+    apiKey.value = savedApiKey
+}
+onMounted(() => {
+  initApiKey()
+})
+</script>
+<template>
+  <div class="api-key-settings">
+    <h3>API 设置</h3>
+    <!-- 输入框 -->
+    <div class="input-group">
+      <Input.Password
+        v-model:value="apiKey"
+        placeholder="请输入以 sk- 开头的 API Key"
+        @press-enter="saveApiKey"
+      />
+      <Button type="primary" :disabled="!apiKey" @click="saveApiKey">
+        保存
+      </Button>
+    </div>
+    <!-- 错误提示 -->
+    <p v-if="error" class="error-message">
+      {{ error }}
+    </p>
+    <!-- 成功提示 -->
+    <p v-if="success" class="success-message">
+      API Key 已保存
+    </p>
+    <!-- 提示 -->
+    <div class="tips">
+      <p>提示：</p>
+      <ul>
+        <li>API Key试用：sk-jfSwObEaEjSLe3WoJly2Gv9vBoqBtnZtetoaDWRSpTwfr0Mp</li>
+        <li>API Key 应以 sk- 开头</li>
+        <li>请确保输入完整的 API Key</li>
+        <li>API Key 将安全地存储在本地</li>
+        <li>如遇到问题，请检查 API Key 是否有效</li>
+      </ul>
+    </div>
+  </div>
+</template>
+<style scoped>
+.api-key-settings {
+  padding: 1rem;
+  border-radius: 8px;
+  background: #f5f5f5;
+}
+.input-group {
+  display: flex;
+  gap: 8px;
+  margin: 1rem 0;
+  :deep(.ant-input-affix-wrapper) {
+    flex: 1;
+  }
+}
+.error-message {
+  color: #d32f2f;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.success-message {
+  color: #2e7d32;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.tips {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.tips p {
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+.tips ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.tips li {
+  margin: 4px 0;
+  color: #666;
+}
+</style>
+<script setup lang="ts">
+import { computed, nextTick, watch } from 'vue'
+import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
+interface Props {
+  content: string
+}
+const props = defineProps<Props>()
+const md = new MarkdownIt({
+  html: false, 
+  breaks: true, 
+  linkify: true, 
+  highlight: (str: string, lang: string) => {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return hljs.highlight(str, { language: lang }).value
+      }
+      catch (e) {
+        console.error(e)
+      }
+    }
+    return '' 
+  },
+})
+const renderedContent = computed(() => {
+  if (!props.content)
+    return ''
+  return md.render(props.content)
+})
+function setupCodeCopy() {
+  const preElements = document.querySelectorAll('pre')
+  preElements.forEach((pre) => {
+    const copyButton = document.createElement('button')
+    copyButton.className = 'copy-button'
+    copyButton.textContent = '复制'
+    pre.appendChild(copyButton)
+    copyButton.addEventListener('click', async () => {
+      const code = pre.querySelector('code')?.textContent || ''
+      try {
+        await navigator.clipboard.writeText(code)
+        copyButton.textContent = '已复制!'
+        setTimeout(() => {
+          copyButton.textContent = '复制'
+        }, 2000)
+      }
+      catch (err) {
+        console.error('复制失败:', err)
+        copyButton.textContent = '复制失败'
+      }
+    })
+  })
+}
+watch(renderedContent, () => {
+  nextTick(() => {
+    setupCodeCopy()
+  })
+}, { immediate: true })
+</script>
+<template>
+  <!-- v-html将HTML字符串解析为原生HTML -->
+  <div
+    class="markdown-content"
+    v-html="renderedContent"
+  />
+</template>
+<style lang="scss" scoped>
+.markdown-content {
+  line-height: 1.6;
+  :deep(p) {
+    margin: 0.5em 0;
+  }
+  :deep(pre) {
+    position: relative;
+    margin: 1em 0;
+    padding: 1em;
+    background-color: #f6f8fa;
+    border-radius: 6px;
+    overflow-x: auto;
+    code {
+      padding: 0;
+      background: none;
+    }
+    .copy-button {
+      position: absolute;
+      top: 0.5em;
+      right: 0.5em;
+      padding: 0.25em 0.5em;
+      font-size: 0.85em;
+      color: #666;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+      &:hover {
+        color: #333;
+        border-color: #999;
+      }
+    }
+    &:hover .copy-button {
+      opacity: 1;
+    }
+  }
+  :deep(code) {
+    padding: 0.2em 0.4em;
+    font-size: 0.85em;
+    background-color: #f6f8fa;
+    border-radius: 3px;
+  }
+  :deep(a) {
+    color: #0366d6;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+  :deep(img) {
+    max-width: 100%;
+    height: auto;
+  }
+  :deep(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+    th, td {
+      padding: 0.5em;
+      border: 1px solid #ddd;
+    }
+    th {
+      background-color: #f6f8fa;
+    }
+  }
+}
+</style>
+<script setup lang="ts">
+</script>
+<template>
+  <router-view />
+</template>
+<style scoped>
+</style>
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Button, Input } from 'ant-design-vue'
+import { SendOutlined } from '@ant-design/icons-vue'
+interface Props {
+  placeholder?: string
+  inline?: boolean
+}
+defineProps<Props>()
+const emit = defineEmits<{
+  expand: []
+  submit: [content: string]
+}>()
+const inputValue = ref('')
+function handleSubmit() {
+  const content = inputValue.value.trim()
+  if (content) {
+    emit('submit', content)
+    inputValue.value = ''
+  }
+}
+function handleFocus() {
+  emit('expand')
+}
+</script>
+<template>
+  <div class="inline-chat-input" :class="{ inline }">
+    <Input
+      v-model:value="inputValue"
+      :placeholder="placeholder"
+      class="input"
+      @focus="handleFocus"
+      @press-enter="handleSubmit"
+    >
+      <template #suffix>
+        <Button
+          type="text"
+          class="submit-btn"
+          :disabled="!inputValue.trim()"
+          @click="handleSubmit"
+        >
+          <SendOutlined />
+        </Button>
+      </template>
+    </Input>
+  </div>
+</template>
+<style lang="scss" scoped>
+.inline-chat-input {
+  width: 300px;
+  &.inline {
+    width: 240px;
+    .input {
+      border-radius: 6px;
+      box-shadow: none;
+      border-color: #eaeaea;
+      &:hover, :deep(.ant-input:focus) {
+        border-color: #000;
+      }
+    }
+  }
+  .input {
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    :deep(.ant-input) {
+      background: transparent;
+      padding-right: 40px;
+      &:focus {
+        box-shadow: none;
+      }
+    }
+  }
+  .submit-btn {
+    color: #1890ff;
+    padding: 0 8px;
+    height: 24px;
+    line-height: 24px;
+    &:disabled {
+      color: rgba(0, 0, 0, 0.25);
+    }
+  }
+}
+</style>
+<script setup lang="ts">
+import { ref } from 'vue'
+import type { ImageMessage } from '../../store/chat'
+defineProps<{
+  message: ImageMessage
+  showMetadata?: boolean
+}>()
+const showPreview = ref(false)
+const previewUrl = ref('')
+function handlePreview(url: string) {
+  previewUrl.value = url
+  showPreview.value = true
+}
+function closePreview() {
+  showPreview.value = false
+  previewUrl.value = ''
+}
+async function handleDownload(url: string) {
+  try {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    const blobUrl = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = url.split('/').pop() || `image-${Date.now()}.png`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(blobUrl)
+  }
+  catch (error) {
+    console.error('下载图片失败:', error)
+  }
+}
+</script>
+<template>
+  <div class="image-message">
+    <div class="image-list">
+      <div v-for="(url, index) in message.imageUrls" :key="index" class="image-item">
+        <div class="image-wrapper">
+          <img :src="url" :alt="message.content" @click="handlePreview(url)">
+          <div class="download-button" title="下载图片" @click.stop="handleDownload(url)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </div>
+        </div>
+        <!-- 图片描述 -->
+        <div v-if="message.role === 'assistant' && message.metadata?.description" class="image-description">
+          {{ message.metadata.description }}
+        </div>
+      </div>
+    </div>
+    <!-- 图片预览 -->
+    <div v-if="showPreview" class="preview-overlay" @click="closePreview">
+      <div class="preview-content">
+        <img :src="previewUrl" :alt="message.content">
+      </div>
+    </div>
+    <!-- 错误状态 -->
+    <div v-if="message.status === 'error'" class="error">
+      图片生成失败，请重试
+    </div>
+  </div>
+</template>
+<style scoped>
+.image-message {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.image-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.image-item {
+  position: relative;
+  width: fit-content;
+  max-width: 300px;
+}
+.image-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.image-wrapper img {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.download-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.image-wrapper:hover .download-button {
+  opacity: 1;
+}
+.preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  cursor: pointer;
+}
+.preview-content {
+  max-width: 90vw;
+  max-height: 90vh;
+}
+.preview-content img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.error {
+  padding: 8px 12px;
+  background: var(--error-bg);
+  color: var(--error-color);
+  border-radius: 4px;
+  font-size: 14px;
+}
+.image-description {
+  margin-top: 8px;
+  padding: 8px 0;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+</style>
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useChatStore } from '../../store/chat'
+import InlineChatBox from './InlineChatBox.vue'
+interface Props {
+  position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left'
+  placeholder?: string
+  initialPrompt?: string
+  inline?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+  position: 'top-right',
+  placeholder: '有什么可以帮你的？',
+  initialPrompt: undefined,
+  inline: false,
+})
+const emit = defineEmits<{
+  close: []
+}>()
+const mode = ref<'expanded' | 'chatting'>('expanded')
+const store = useChatStore()
+const { loading } = storeToRefs(store)
+const containerClass = computed(() => [
+  'inline-chat-dialog',
+  props.position,
+  mode.value,
+  { inline: props.inline },
+])
+function handleClose() {
+  mode.value = 'expanded'
+  emit('close')
+}
+function handleBack() {
+  mode.value = 'expanded'
+}
+function handleSwitchMode(newMode: 'expanded' | 'chatting') {
+  mode.value = newMode
+}
+async function handleSubmit(content: string) {
+  if (!content)
+    return
+  if (mode.value !== 'chatting')
+    mode.value = 'chatting'
+  if (!store.currentSessionId)
+    store.createSession()
+  await store.sendMessage(content)
+}
+</script>
+<template>
+  <div :class="containerClass">
+    <!-- 遮罩层 -->
+    <div v-if="!props.inline" class="dialog-overlay" @click="handleClose" />
+    <Transition name="fade" mode="out-in">
+      <!-- 展开状态 & 对话状态 -->
+      <InlineChatBox
+        :loading="loading"
+        :mode="mode"
+        @close="handleClose"
+        @back="handleBack"
+        @submit="handleSubmit"
+        @switch-mode="handleSwitchMode"
+      />
+    </Transition>
+  </div>
+</template>
+<style lang="scss" scoped>
+.inline-chat-dialog {
+  position: fixed;
+  z-index: 1000;
+  &.inline {
+    position: relative;
+    z-index: 1;
+    &.expanded, &.chatting {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+  &:not(.inline) {
+    &.top-right {
+      top: 20px;
+      right: 20px;
+    }
+    &.top-left {
+      top: 20px;
+      left: 20px;
+    }
+    &.bottom-right {
+      bottom: 20px;
+      right: 20px;
+    }
+    &.bottom-left {
+      bottom: 20px;
+      left: 20px;
+    }
+  }
+}
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: -1;
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.fade-enter-to,
+.fade-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+</style>
+<script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
+import { Button, Empty, Input } from 'ant-design-vue'
+import { CloseOutlined, LeftOutlined, MessageOutlined, SendOutlined } from '@ant-design/icons-vue'
+import { storeToRefs } from 'pinia'
+import MessageItem from '../../views/chat/components/message/MessageItem.vue'
+import { useChatStore } from '../../store/chat'
+interface Props {
+  loading?: boolean
+  mode: 'expanded' | 'chatting'
+}
+const props = withDefaults(defineProps<Props>(), {
+  loading: false,
+})
+const emit = defineEmits<{
+  close: []
+  back: []
+  submit: [content: string]
+  switchMode: [mode: 'expanded' | 'chatting']
+}>()
+const store = useChatStore()
+const inputValue = ref('')
+const messageListRef = ref<HTMLElement | null>(null)
+const { sessionList, currentMessages } = storeToRefs(store)
+async function scrollToBottom() {
+  await nextTick()
+  if (messageListRef.value)
+    messageListRef.value.scrollTop = messageListRef.value.scrollHeight
+}
+watch(() => currentMessages.value, () => {
+  scrollToBottom()
+}, { deep: true })
+function switchSession(sessionId: string) {
+  store.switchSession(sessionId)
+  emit('switchMode', 'chatting')
+}
+async function handleSubmit() {
+  const content = inputValue.value.trim()
+  if (content) {
+    if (props.mode === 'expanded' || !store.currentSessionId) {
+      store.createSession()
+      emit('switchMode', 'chatting')
+      await nextTick()
+    }
+    emit('submit', content)
+    inputValue.value = ''
+  }
+}
+</script>
+<template>
+  <div class="inline-chat-box">
+    <!-- 头部 -->
+    <div class="chat-header">
+      <div class="header-left">
+        <Button
+          v-if="mode === 'chatting'"
+          type="text"
+          class="back-btn"
+          @click="$emit('back')"
+        >
+          <LeftOutlined />
+        </Button>
+        <span class="title">{{ mode === 'expanded' ? '选择会话' : '对话中' }}</span>
+      </div>
+      <Button type="text" class="close-btn" @click="$emit('close')">
+        <CloseOutlined />
+      </Button>
+    </div>
+    <!-- 输入框 -->
+    <div class="chat-input">
+      <Input.TextArea
+        v-model:value="inputValue"
+        placeholder="输入消息..."
+        :auto-size="{ minRows: 1, maxRows: 4 }"
+        class="input"
+        @press-enter.prevent="handleSubmit"
+      />
+      <Button
+        type="primary"
+        class="submit-btn"
+        :disabled="!inputValue.trim()"
+        @click="handleSubmit"
+      >
+        <SendOutlined />
+      </Button>
+    </div>
+    <!-- 主体内容 -->
+    <div class="chat-body">
+      <!-- 会话列表 -->
+      <template v-if="mode === 'expanded'">
+        <div class="session-list">
+          <!-- 会话列表 -->
+          <template v-if="sessionList.length">
+            <div
+              v-for="session in sessionList"
+              :key="session.id"
+              class="session-item"
+              :class="{ active: session.id === store.currentSessionId }"
+              @click="switchSession(session.id)"
+            >
+              <MessageOutlined />
+              <span class="session-title">{{ session.title }}</span>
+            </div>
+          </template>
+          <Empty v-else description="暂无会话记录" />
+        </div>
+      </template>
+      <!-- 消息列表 -->
+      <template v-else>
+        <div ref="messageListRef" class="message-list">
+          <template v-if="currentMessages.length">
+            <MessageItem
+              v-for="message in currentMessages"
+              :key="message.id"
+              :message="message"
+            />
+          </template>
+          <div v-else class="empty-state">
+            开始新的对话...
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>
+<style lang="scss" scoped>
+.inline-chat-box {
+  width: 600px;
+  height: 600px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 90vh;
+  max-width: 90vw;
+  .chat-header {
+    padding: 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .back-btn {
+      padding: 4px;
+      color: #999;
+      transition: all 0.2s;
+      &:hover {
+        color: #000;
+        background-color: #f5f5f5;
+      }
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 500;
+    }
+    .close-btn {
+      padding: 4px;
+      color: #999;
+      transition: all 0.2s;
+      &:hover {
+        color: #000;
+        background-color: #f5f5f5;
+      }
+    }
+  }
+  .chat-input {
+    padding: 16px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    .input {
+      flex: 1;
+      :deep(.ant-input) {
+        border-radius: 8px;
+        resize: none;
+        border-color: #d9d9d9;
+        &:hover, &:focus {
+          border-color: #000;
+          box-shadow: none;
+        }
+      }
+    }
+    .submit-btn {
+      align-self: flex-end;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #000;
+      border-color: #000;
+      &:hover {
+        background-color: #333;
+        border-color: #333;
+      }
+      &:disabled {
+        background-color: #f5f5f5;
+        border-color: #d9d9d9;
+      }
+    }
+  }
+  .chat-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .session-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    .session-item {
+      padding: 12px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #666;
+      .session-title {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+    :deep(.ant-empty) {
+      margin: 32px 0;
+      color: #999;
+    }
+  }
+  .message-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    .empty-state {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-size: 14px;
+    }
+    &::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #d9d9d9;
+      border-radius: 3px;
+      &:hover {
+        background: #bfbfbf;
+      }
+    }
+  }
+}
+</style>
+import InlineChatDialog from './InlineChatDialog.vue'
+import InlineChatInput from './InlineChatInput.vue'
+import InlineChatBox from './InlineChatBox.vue'
+export {
+  InlineChatDialog,
+  InlineChatInput,
+  InlineChatBox,
+}
+export default InlineChatDialog
+import axios from 'axios'
+import type { ImageGenerationError, ImageGenerationOptions, ImageGenerationResponse } from '../types/image'
+import { API_CONFIG } from '../config'
+function validateOptions(options: ImageGenerationOptions): void {
+  const { prompt, n = 1, size = '1024x1024' } = options
+  const { maxTokens, limits } = API_CONFIG.imageGeneration
+  if (!prompt || prompt.length > maxTokens)
+    throw new Error(`提示词长度必须在1-${maxTokens}字符之间`)
+  if (n < 1 || n > limits.maxImages)
+    throw new Error(`生成图片数量必须在1-${limits.maxImages}之间`)
+  const [width, height] = size.split('x').map(Number)
+  if (width < limits.minSize || width > limits.maxSize || height < limits.minSize || height > limits.maxSize)
+    throw new Error(`图片尺寸必须在${limits.minSize}x${limits.minSize}到${limits.maxSize}x${limits.maxSize}之间`)
+}
+export const imageService = {
+  async generateImage(
+    options: ImageGenerationOptions,
+    onProgress?: (progress: number) => void,
+  ): Promise<ImageGenerationResponse> {
+    try {
+      validateOptions(options)
+      const finalOptions = {
+        model: API_CONFIG.imageGeneration.model,
+        n: 1,
+        size: API_CONFIG.imageGeneration.defaultSize,
+        response_format: 'url',
+        ...options,
+      }
+      const response = await axios.post<ImageGenerationResponse>(
+        `${API_CONFIG.baseURL}/images/generations`,
+        finalOptions,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('openai_api_key')}`,
+            'Content-Type': 'application/json',
+          },
+          onUploadProgress: (progressEvent) => {
+            if (onProgress && progressEvent.total) {
+              const progress = (progressEvent.loaded / progressEvent.total) * 100
+              onProgress(Math.min(progress, 99))
+            }
+          },
+        },
+      )
+      onProgress?.(100)
+      return response.data
+    }
+    catch (error: any) {
+      const apiError: ImageGenerationError = {
+        message: error.response?.data?.error?.message || error.message || '图片生成失败',
+        type: error.response?.data?.error?.type || 'GenerationError',
+        code: error.response?.data?.error?.code || 'UNKNOWN_ERROR',
+      }
+      throw apiError
+    }
+  },
+  getSupportedSizes(): string[] {
+    return ['256x256', '512x512', '1024x1024']
+  },
+  getSupportedFormats(): string[] {
+    return API_CONFIG.imageGeneration.supportedFormats
+  },
+  getLimits() {
+    return API_CONFIG.imageGeneration.limits
+  },
+}
+import axios, { type AxiosProgressEvent, type AxiosResponse } from 'axios'
+import type { Message } from '../store/chat'
+import { API_CONFIG, STORAGE_KEYS } from '../config'
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+interface ChatCompletionRequest {
+  model: string
+  messages: ChatMessage[]
+  temperature?: number
+  stream?: boolean
+}
+interface ChatCompletionResponse {
+  id: string
+  choices: {
+    message: ChatMessage
+    finish_reason: string
+  }[]
+}
+interface ChatStreamResponse {
+  id: string
+  choices: {
+    delta: {
+      content?: string
+    }
+    finish_reason?: string
+  }[]
+}
+interface ChatHttpOption {
+  url: string
+  data?: any
+  method?: string
+  headers?: Record<string, string>
+  onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
+  signal?: AbortSignal
+}
+const chatAPI = axios.create({
+  baseURL: API_CONFIG.baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 60000, 
+})
+chatAPI.interceptors.request.use((config) => {
+  const apiKey = localStorage.getItem(STORAGE_KEYS.apiKey)
+  if (apiKey) {
+    config.headers.Authorization = `Bearer ${apiKey}`
+    config.headers['x-requested-with'] = 'XMLHttpRequest'
+  }
+  return config
+})
+chatAPI.interceptors.response.use(
+  response => response,
+  (error) => {
+    const errorMap = {
+      401: 'API Key 无效或已过期',
+      403: '没有访问权限',
+      429: '请求次数超限',
+      500: '服务器错误',
+    }
+    if (error.response) {
+      const status = error.response.status
+      console.error(errorMap[status] || `请求失败: ${status}`, error.response.data)
+    }
+    else if (error.request) {
+      console.error('网络错误，未收到响应')
+    }
+    else {
+      console.error('请求配置错误:', error.message)
+    }
+    return Promise.reject(error)
+  },
+)
+async function http<T = any>({
+  url,
+  data,
+  method = 'POST',
+  headers,
+  onDownloadProgress,
+  signal,
+}: ChatHttpOption): Promise<T> {
+  const config: any = {
+    url,
+    method,
+    headers,
+    signal,
+    onDownloadProgress,
+  }
+  if (method === 'GET')
+    config.params = data
+  else
+    config.data = data
+  const response: AxiosResponse<T> = await chatAPI(config)
+  return response.data
+}
+function setApiKey(apiKey: string) {
+  localStorage.setItem(STORAGE_KEYS.apiKey, apiKey)
+}
+function getApiKey() {
+  return localStorage.getItem(STORAGE_KEYS.apiKey)
+}
+async function sendMessage(messages: Message[], options = {}) {
+  const requestData: ChatCompletionRequest = {
+    model: API_CONFIG.model,
+    messages: messages.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+    })),
+    temperature: API_CONFIG.temperature,
+    ...options,
+  }
+  try {
+    const response = await http<ChatCompletionResponse>({
+      url: '/chat/completions',
+      data: requestData,
+    })
+    return response.choices[0].message
+  }
+  catch (error) {
+    console.error('发送消息失败:', error)
+    throw error
+  }
+}
+async function sendStreamMessage(
+  messages: Message[],
+  options = {},
+  onProgress?: (text: string) => void,
+) {
+  const requestData: ChatCompletionRequest = {
+    model: API_CONFIG.model, 
+    messages: messages.map(msg => ({
+      role: msg.role, 
+      content: msg.content, 
+    })),
+    temperature: API_CONFIG.temperature, 
+    stream: true, 
+    ...options, 
+  }
+  let responseText = '' 
+  let currentChunk = '' 
+  try {
+    await http<string>({
+      url: '/chat/completions',
+      data: requestData,
+      headers: {
+        'Accept': 'text/event-stream', 
+      },
+      onDownloadProgress: (progressEvent: AxiosProgressEvent) => {
+        const chunk = progressEvent.event.target.response as string || ''
+        console.log('chunk', chunk)
+        const newContent = chunk.substring(currentChunk.length)
+        console.log('newContent', newContent)
+        currentChunk = chunk
+        const lines = newContent.split('\n')
+        for (const line of lines) {
+          if (!line.trim() || line.includes('[DONE]'))
+            continue
+          try {
+            const data = line.replace(/^data: /, '').trim()
+            if (!data)
+              continue
+            const parsed = JSON.parse(data) as ChatStreamResponse
+            const content = parsed.choices[0]?.delta?.content || ''
+            if (content) {
+              responseText += content 
+              onProgress?.(responseText) 
+            }
+          }
+          catch {
+            continue 
+          }
+        }
+      },
+    })
+    if (!responseText)
+      throw new Error('未收到有效的响应内容')
+    return {
+      role: 'assistant' as const,
+      content: responseText,
+    }
+  }
+  catch (error) {
+    console.error('发送流式消息失败:', error)
+    throw error
+  }
+}
+export const chatService = {
+  setApiKey,
+  getApiKey,
+  sendMessage,
+  sendStreamMessage,
+}
