@@ -462,21 +462,21 @@ export const useChatStore = defineStore('chat', () => {
   // 导出 Store 接口
   return {
     // State
-    currentSessionId,
-    sessions,
-    loading,
-    error,
+    currentSessionId, // 当前会话ID
+    sessions, // 所有会话列表
+    loading, // 加载状态
+    error, // 错误信息
     // Getters
-    currentSession,
-    currentMessages,
-    sessionList,
+    currentSession, // 当前会话
+    currentMessages, // 当前会话的消息列表
+    sessionList, // 会话列表
     // Actions
-    createSession,
-    switchSession,
-    sendMessage,
-    sendImagePrompt,
-    clearCurrentSession,
-    deleteSession,
-    updateSessionTitle,
+    createSession, // 创建会话
+    switchSession, // 切换会话
+    sendMessage, // 发送消息
+    sendImagePrompt, // 发送图片生成请求
+    clearCurrentSession, // 清空当前会话
+    deleteSession, // 删除会话
+    updateSessionTitle, // 更新会话标题
   }
 })
