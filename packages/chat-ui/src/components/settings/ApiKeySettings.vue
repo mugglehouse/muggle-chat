@@ -79,7 +79,7 @@ onMounted(() => {
     <div class="tips">
       <p>提示：</p>
       <ul>
-        <li>API Key试用：sk-jfSwObEaEjSLe3WoJly2Gv9vBoqBtnZtetoaDWRSpTwfr0Mp</li>
+        <li>API Key试用：sk-QwEpt6oKUemTMoYMJsZhHRSJAPZ4czAOgrMIkcbadJVwPMA4</li>
         <li>API Key 应以 sk- 开头</li>
         <li>请确保输入完整的 API Key</li>
         <li>API Key 将安全地存储在本地</li>
