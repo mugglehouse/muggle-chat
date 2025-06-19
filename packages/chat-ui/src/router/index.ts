@@ -1,6 +1,6 @@
 import type { App } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -16,7 +16,8 @@ const routes: RouteRecordRaw[] = [
 ]
 
 export const router = createRouter({
-  history: createWebHistory(),
+  // 改成 hash 模式
+  history: createWebHashHistory(),
   routes,
   scrollBehavior: () => ({ left: 0, top: 0 }),
 })
